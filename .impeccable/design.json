@@ -1,0 +1,501 @@
+{
+	"schemaVersion": 2,
+	"generatedAt": "2026-08-27T17:34:13.4346574Z",
+	"title": "Design System: InsightFlow",
+	"extensions": {
+		"colorMeta": {
+			"warm-canvas": {
+				"role": "neutral",
+				"displayName": "Warm Briefing Canvas",
+				"tonalRamp": [
+					"oklch(0.15 0.006 85)",
+					"oklch(0.27 0.006 85)",
+					"oklch(0.39 0.006 85)",
+					"oklch(0.51 0.006 85)",
+					"oklch(0.63 0.006 85)",
+					"oklch(0.75 0.006 85)",
+					"oklch(0.87 0.006 85)",
+					"oklch(0.95 0.006 85)"
+				]
+			},
+			"background": {
+				"role": "neutral",
+				"displayName": "Warm Background",
+				"tonalRamp": [
+					"oklch(0.15 0.003 85)",
+					"oklch(0.27 0.003 85)",
+					"oklch(0.39 0.003 85)",
+					"oklch(0.51 0.003 85)",
+					"oklch(0.63 0.003 85)",
+					"oklch(0.75 0.003 85)",
+					"oklch(0.87 0.003 85)",
+					"oklch(0.95 0.003 85)"
+				]
+			},
+			"surface": {
+				"role": "neutral",
+				"displayName": "Evidence White",
+				"tonalRamp": [
+					"oklch(0.15 0 0)",
+					"oklch(0.27 0 0)",
+					"oklch(0.39 0 0)",
+					"oklch(0.51 0 0)",
+					"oklch(0.63 0 0)",
+					"oklch(0.75 0 0)",
+					"oklch(0.87 0 0)",
+					"oklch(0.95 0 0)"
+				]
+			},
+			"ink": {
+				"role": "neutral",
+				"displayName": "Blue-Gray Ink",
+				"tonalRamp": [
+					"oklch(0.15 0.025 264)",
+					"oklch(0.27 0.025 264)",
+					"oklch(0.39 0.025 264)",
+					"oklch(0.51 0.025 264)",
+					"oklch(0.63 0.025 264)",
+					"oklch(0.75 0.025 264)",
+					"oklch(0.87 0.025 264)",
+					"oklch(0.95 0.025 264)"
+				]
+			},
+			"muted-surface": {
+				"role": "neutral",
+				"displayName": "Quiet Surface",
+				"tonalRamp": [
+					"oklch(0.15 0.008 264)",
+					"oklch(0.27 0.008 264)",
+					"oklch(0.39 0.008 264)",
+					"oklch(0.51 0.008 264)",
+					"oklch(0.63 0.008 264)",
+					"oklch(0.75 0.008 264)",
+					"oklch(0.87 0.008 264)",
+					"oklch(0.95 0.008 264)"
+				]
+			},
+			"muted-ink": {
+				"role": "neutral",
+				"displayName": "Muted Blue-Gray",
+				"tonalRamp": [
+					"oklch(0.15 0.025 264)",
+					"oklch(0.27 0.025 264)",
+					"oklch(0.39 0.025 264)",
+					"oklch(0.51 0.025 264)",
+					"oklch(0.63 0.025 264)",
+					"oklch(0.75 0.025 264)",
+					"oklch(0.87 0.025 264)",
+					"oklch(0.95 0.025 264)"
+				]
+			},
+			"hairline": {
+				"role": "neutral",
+				"displayName": "Hairline Blue-Gray",
+				"tonalRamp": [
+					"oklch(0.15 0.012 264)",
+					"oklch(0.27 0.012 264)",
+					"oklch(0.39 0.012 264)",
+					"oklch(0.51 0.012 264)",
+					"oklch(0.63 0.012 264)",
+					"oklch(0.75 0.012 264)",
+					"oklch(0.87 0.012 264)",
+					"oklch(0.95 0.012 264)"
+				]
+			},
+			"primary": {
+				"role": "primary",
+				"displayName": "Decision Indigo",
+				"tonalRamp": [
+					"oklch(0.15 0.2 276)",
+					"oklch(0.27 0.2 276)",
+					"oklch(0.39 0.2 276)",
+					"oklch(0.51 0.2 276)",
+					"oklch(0.63 0.2 276)",
+					"oklch(0.75 0.2 276)",
+					"oklch(0.87 0.2 276)",
+					"oklch(0.95 0.2 276)"
+				]
+			},
+			"primary-foreground": {
+				"role": "neutral",
+				"displayName": "Primary Foreground",
+				"tonalRamp": [
+					"oklch(0.15 0 0)",
+					"oklch(0.27 0 0)",
+					"oklch(0.39 0 0)",
+					"oklch(0.51 0 0)",
+					"oklch(0.63 0 0)",
+					"oklch(0.75 0 0)",
+					"oklch(0.87 0 0)",
+					"oklch(0.95 0 0)"
+				]
+			},
+			"primary-soft": {
+				"role": "primary",
+				"displayName": "Violet Wash",
+				"tonalRamp": [
+					"oklch(0.15 0.03 286)",
+					"oklch(0.27 0.03 286)",
+					"oklch(0.39 0.03 286)",
+					"oklch(0.51 0.03 286)",
+					"oklch(0.63 0.03 286)",
+					"oklch(0.75 0.03 286)",
+					"oklch(0.87 0.03 286)",
+					"oklch(0.95 0.03 286)"
+				]
+			},
+			"info": {
+				"role": "tertiary",
+				"displayName": "Evidence Blue",
+				"tonalRamp": [
+					"oklch(0.15 0.16 252)",
+					"oklch(0.27 0.16 252)",
+					"oklch(0.39 0.16 252)",
+					"oklch(0.51 0.16 252)",
+					"oklch(0.63 0.16 252)",
+					"oklch(0.75 0.16 252)",
+					"oklch(0.87 0.16 252)",
+					"oklch(0.95 0.16 252)"
+				]
+			},
+			"success": {
+				"role": "tertiary",
+				"displayName": "Resolution Green",
+				"tonalRamp": [
+					"oklch(0.15 0.14 155)",
+					"oklch(0.27 0.14 155)",
+					"oklch(0.39 0.14 155)",
+					"oklch(0.51 0.14 155)",
+					"oklch(0.63 0.14 155)",
+					"oklch(0.75 0.14 155)",
+					"oklch(0.87 0.14 155)",
+					"oklch(0.95 0.14 155)"
+				]
+			},
+			"success-soft": {
+				"role": "tertiary",
+				"displayName": "Resolution Wash",
+				"tonalRamp": [
+					"oklch(0.15 0.03 155)",
+					"oklch(0.27 0.03 155)",
+					"oklch(0.39 0.03 155)",
+					"oklch(0.51 0.03 155)",
+					"oklch(0.63 0.03 155)",
+					"oklch(0.75 0.03 155)",
+					"oklch(0.87 0.03 155)",
+					"oklch(0.95 0.03 155)"
+				]
+			},
+			"warning": {
+				"role": "tertiary",
+				"displayName": "Attention Amber",
+				"tonalRamp": [
+					"oklch(0.15 0.16 79)",
+					"oklch(0.27 0.16 79)",
+					"oklch(0.39 0.16 79)",
+					"oklch(0.51 0.16 79)",
+					"oklch(0.63 0.16 79)",
+					"oklch(0.75 0.16 79)",
+					"oklch(0.87 0.16 79)",
+					"oklch(0.95 0.16 79)"
+				]
+			},
+			"warning-soft": {
+				"role": "tertiary",
+				"displayName": "Attention Wash",
+				"tonalRamp": [
+					"oklch(0.15 0.03 79)",
+					"oklch(0.27 0.03 79)",
+					"oklch(0.39 0.03 79)",
+					"oklch(0.51 0.03 79)",
+					"oklch(0.63 0.03 79)",
+					"oklch(0.75 0.03 79)",
+					"oklch(0.87 0.03 79)",
+					"oklch(0.95 0.03 79)"
+				]
+			},
+			"warning-ink": {
+				"role": "tertiary",
+				"displayName": "Attention Ink",
+				"tonalRamp": [
+					"oklch(0.15 0.12 66)",
+					"oklch(0.27 0.12 66)",
+					"oklch(0.39 0.12 66)",
+					"oklch(0.51 0.12 66)",
+					"oklch(0.63 0.12 66)",
+					"oklch(0.75 0.12 66)",
+					"oklch(0.87 0.12 66)",
+					"oklch(0.95 0.12 66)"
+				]
+			},
+			"danger": {
+				"role": "tertiary",
+				"displayName": "Intervention Red",
+				"tonalRamp": [
+					"oklch(0.15 0.2 25)",
+					"oklch(0.27 0.2 25)",
+					"oklch(0.39 0.2 25)",
+					"oklch(0.51 0.2 25)",
+					"oklch(0.63 0.2 25)",
+					"oklch(0.75 0.2 25)",
+					"oklch(0.87 0.2 25)",
+					"oklch(0.95 0.2 25)"
+				]
+			},
+			"danger-soft": {
+				"role": "tertiary",
+				"displayName": "Intervention Wash",
+				"tonalRamp": [
+					"oklch(0.15 0.03 25)",
+					"oklch(0.27 0.03 25)",
+					"oklch(0.39 0.03 25)",
+					"oklch(0.51 0.03 25)",
+					"oklch(0.63 0.03 25)",
+					"oklch(0.75 0.03 25)",
+					"oklch(0.87 0.03 25)",
+					"oklch(0.95 0.03 25)"
+				]
+			},
+			"planned": {
+				"role": "tertiary",
+				"displayName": "Planned Cyan",
+				"tonalRamp": [
+					"oklch(0.15 0.13 203)",
+					"oklch(0.27 0.13 203)",
+					"oklch(0.39 0.13 203)",
+					"oklch(0.51 0.13 203)",
+					"oklch(0.63 0.13 203)",
+					"oklch(0.75 0.13 203)",
+					"oklch(0.87 0.13 203)",
+					"oklch(0.95 0.13 203)"
+				]
+			},
+			"sidebar": {
+				"role": "neutral",
+				"displayName": "Navigation Slate",
+				"tonalRamp": [
+					"oklch(0.15 0.006 264)",
+					"oklch(0.27 0.006 264)",
+					"oklch(0.39 0.006 264)",
+					"oklch(0.51 0.006 264)",
+					"oklch(0.63 0.006 264)",
+					"oklch(0.75 0.006 264)",
+					"oklch(0.87 0.006 264)",
+					"oklch(0.95 0.006 264)"
+				]
+			},
+			"sidebar-active": {
+				"role": "primary",
+				"displayName": "Navigation Selection",
+				"tonalRamp": [
+					"oklch(0.15 0.025 276)",
+					"oklch(0.27 0.025 276)",
+					"oklch(0.39 0.025 276)",
+					"oklch(0.51 0.025 276)",
+					"oklch(0.63 0.025 276)",
+					"oklch(0.75 0.025 276)",
+					"oklch(0.87 0.025 276)",
+					"oklch(0.95 0.025 276)"
+				]
+			},
+			"sidebar-active-foreground": {
+				"role": "primary",
+				"displayName": "Navigation Selection Ink",
+				"tonalRamp": [
+					"oklch(0.15 0.12 276)",
+					"oklch(0.27 0.12 276)",
+					"oklch(0.39 0.12 276)",
+					"oklch(0.51 0.12 276)",
+					"oklch(0.63 0.12 276)",
+					"oklch(0.75 0.12 276)",
+					"oklch(0.87 0.12 276)",
+					"oklch(0.95 0.12 276)"
+				]
+			}
+		},
+		"typographyMeta": {
+			"display": {
+				"displayName": "Decision Display",
+				"purpose": "Page titles and primary metric values."
+			},
+			"headline": {
+				"displayName": "Panel Headline",
+				"purpose": "Briefs and evidence-panel headings."
+			},
+			"title": {
+				"displayName": "Compact Title",
+				"purpose": "Product identity and compact section anchors."
+			},
+			"body": {
+				"displayName": "Operational Body",
+				"purpose": "Interface copy, table content, descriptions, and controls."
+			},
+			"label": {
+				"displayName": "Navigation Label",
+				"purpose": "Small uppercase navigation group labels."
+			}
+		},
+		"motion": [
+			{
+				"name": "duration-standard",
+				"value": "150ms",
+				"purpose": "Default control, row, and color-state transitions."
+			},
+			{
+				"name": "ease-standard",
+				"value": "cubic-bezier(0.4, 0, 0.2, 1)",
+				"purpose": "Default easing for quiet operational state changes."
+			}
+		],
+		"breakpoints": [
+			{
+				"name": "sm",
+				"value": "640px"
+			},
+			{
+				"name": "md",
+				"value": "768px"
+			},
+			{
+				"name": "lg",
+				"value": "1024px"
+			},
+			{
+				"name": "xl",
+				"value": "1280px"
+			}
+		]
+	},
+	"components": [
+		{
+			"name": "Primary Button",
+			"kind": "button",
+			"refersTo": "button-primary",
+			"description": "The strongest page-level action, used once within a local decision group.",
+			"html": "<button class=\"ds-button-primary\">New project</button>",
+			"css": ".ds-button-primary { height: 36px; border: 1px solid transparent; border-radius: var(--radius); padding: 0 10px; background: var(--primary); color: var(--primary-foreground); font-family: var(--font-sans), sans-serif; font-size: 14px; font-weight: 500; transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), transform 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-button-primary:hover { background: color-mix(in oklch, var(--primary) 80%, transparent); } .ds-button-primary:focus-visible { border-color: var(--ring); outline: 3px solid color-mix(in oklch, var(--ring) 50%, transparent); outline-offset: 1px; } .ds-button-primary:active { transform: translateY(1px); }"
+		},
+		{
+			"name": "Outline Button",
+			"kind": "button",
+			"refersTo": "button-outline",
+			"description": "Filters and secondary actions that stay visible without competing with the primary decision.",
+			"html": "<button class=\"ds-button-outline\">Last 30 days</button>",
+			"css": ".ds-button-outline { height: 36px; border: 1px solid var(--border); border-radius: var(--radius); padding: 0 10px; background: var(--background); color: var(--foreground); font-family: var(--font-sans), sans-serif; font-size: 14px; font-weight: 500; transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), border-color 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-button-outline:hover { background: var(--muted); } .ds-button-outline:focus-visible { border-color: var(--ring); outline: 3px solid color-mix(in oklch, var(--ring) 50%, transparent); outline-offset: 1px; } .ds-button-outline:active { transform: translateY(1px); }"
+		},
+		{
+			"name": "Text Input",
+			"kind": "input",
+			"refersTo": "input",
+			"description": "A compact operational field with a visible boundary and an explicit indigo focus state.",
+			"html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Search feedback\" />",
+			"css": ".ds-input { width: 100%; height: 32px; border: 1px solid var(--input); border-radius: var(--radius); padding: 4px 10px; background: transparent; color: var(--foreground); font-family: var(--font-sans), sans-serif; font-size: 14px; transition: border-color 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-input::placeholder { color: var(--muted-foreground); } .ds-input:hover { border-color: color-mix(in oklch, var(--foreground) 22%, transparent); } .ds-input:focus-visible { border-color: var(--ring); outline: none; box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent); }"
+		},
+		{
+			"name": "Active Navigation Item",
+			"kind": "nav",
+			"refersTo": "navigation-active",
+			"description": "The single current destination in the persistent cool sidebar.",
+			"html": "<a class=\"ds-nav-active\" href=\"#\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"></rect><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"></rect><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"></rect><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"></rect></svg>Overview</a>",
+			"css": ".ds-nav-active { display: flex; height: 40px; align-items: center; gap: 12px; border-radius: var(--radius); padding: 0 12px; background: var(--sidebar-accent); color: var(--sidebar-accent-foreground); font-family: var(--font-sans), sans-serif; font-size: 14px; font-weight: 500; text-decoration: none; transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-nav-active svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; } .ds-nav-active:hover { background: color-mix(in oklch, var(--sidebar-accent), var(--sidebar-accent-foreground) 5%); } .ds-nav-active:focus-visible { outline: 3px solid color-mix(in oklch, var(--sidebar-ring) 50%, transparent); outline-offset: 2px; } .ds-nav-active:active { transform: translateY(1px); }"
+		},
+		{
+			"name": "Evidence Panel",
+			"kind": "card",
+			"refersTo": "card-panel",
+			"description": "A flat white evidence container with a restrained boundary and compact header hierarchy.",
+			"html": "<section class=\"ds-card\"><header class=\"ds-card-header\"><h3>Feedback movement</h3><p>Received and resolved feedback across the selected period.</p></header><div class=\"ds-card-body\">Evidence belongs here.</div></section>",
+			"css": ".ds-card { overflow: hidden; border-radius: calc(var(--radius) * 1.4); background: var(--card); color: var(--card-foreground); box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 8%, transparent); font-family: var(--font-sans), sans-serif; } .ds-card-header { border-bottom: 1px solid var(--border); padding: 20px 24px; } .ds-card-header h3 { margin: 0; font-family: var(--font-manrope), sans-serif; font-size: 18px; line-height: 28px; font-weight: 600; letter-spacing: -0.025em; } .ds-card-header p { margin: 4px 0 0; color: var(--muted-foreground); font-size: 14px; line-height: 20px; } .ds-card-body { padding: 20px 24px; color: var(--muted-foreground); font-size: 14px; } .ds-card:focus-within { box-shadow: 0 0 0 2px color-mix(in oklch, var(--ring) 35%, transparent); }"
+		},
+		{
+			"name": "At-Risk Status Chip",
+			"kind": "chip",
+			"refersTo": "chip-danger",
+			"description": "A semantic chip for critical or at-risk operational states.",
+			"html": "<span class=\"ds-chip-danger\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"></circle><path d=\"M12 7v6M12 17h.01\"></path></svg>At risk</span>",
+			"css": ".ds-chip-danger { display: inline-flex; align-items: center; gap: 6px; border-radius: calc(var(--radius) * 0.8); padding: 4px 8px; background: var(--dashboard-danger-soft); color: var(--dashboard-danger); font-family: var(--font-sans), sans-serif; font-size: 12px; line-height: 16px; font-weight: 600; } .ds-chip-danger svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; } .ds-chip-danger:hover { background: color-mix(in oklch, var(--dashboard-danger-soft), var(--dashboard-danger) 8%); } .ds-chip-danger:focus-visible { outline: 3px solid color-mix(in oklch, var(--dashboard-danger) 25%, transparent); outline-offset: 2px; }"
+		},
+		{
+			"name": "Decision Brief",
+			"kind": "custom",
+			"refersTo": "decision-brief",
+			"description": "The single high-contrast intervention statement that turns evidence into a next action.",
+			"html": "<section class=\"ds-decision-brief\"><div><h3>The backlog is stable, but ownership needs attention.</h3><p>Four critical items remain open; two have no owner. Client Portal is the first project to review.</p></div><button>Review priority queue →</button></section>",
+			"css": ".ds-decision-brief { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; overflow: hidden; border-radius: calc(var(--radius) * 1.4); background: var(--foreground); color: var(--background); font-family: var(--font-sans), sans-serif; } .ds-decision-brief > div { padding: 20px 24px; } .ds-decision-brief h3 { margin: 0; font-family: var(--font-manrope), sans-serif; font-size: 18px; line-height: 28px; font-weight: 600; letter-spacing: -0.025em; } .ds-decision-brief p { max-width: 720px; margin: 4px 0 0; color: color-mix(in oklch, var(--background) 70%, transparent); font-size: 14px; line-height: 24px; } .ds-decision-brief button { margin: 0; border: 0; border-left: 1px solid color-mix(in oklch, var(--background) 15%, transparent); padding: 0 24px; background: transparent; color: inherit; font-family: var(--font-sans), sans-serif; font-size: 14px; line-height: 20px; font-weight: 500; transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1); } .ds-decision-brief button:hover { background: color-mix(in oklch, var(--background) 10%, transparent); } .ds-decision-brief button:focus-visible { outline: 3px solid color-mix(in oklch, var(--ring) 70%, transparent); outline-offset: -4px; } .ds-decision-brief button:active { transform: translateY(1px); } @media (max-width: 640px) { .ds-decision-brief { grid-template-columns: 1fr; } .ds-decision-brief button { min-height: 64px; border-top: 1px solid color-mix(in oklch, var(--background) 15%, transparent); border-left: 0; } }"
+		},
+		{
+			"name": "Metric Summary Band",
+			"kind": "custom",
+			"refersTo": "card-panel",
+			"description": "Connected operational metrics that compare as one evidence band instead of four detached cards.",
+			"html": "<section class=\"ds-metric-band\"><article><span>Feedback received</span><strong>248</strong><small><b>+12.4%</b> vs. previous period</small></article><article><span>Open feedback</span><strong>62</strong><small><b>25%</b> of all feedback</small></article></section>",
+			"css": ".ds-metric-band { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--card); color: var(--card-foreground); font-family: var(--font-sans), sans-serif; } .ds-metric-band article { display: grid; gap: 10px; padding: 20px 24px; } .ds-metric-band article + article { border-left: 1px solid var(--border); } .ds-metric-band span { color: var(--muted-foreground); font-size: 14px; font-weight: 500; } .ds-metric-band strong { font-family: var(--font-manrope), sans-serif; font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; } .ds-metric-band small { color: var(--muted-foreground); font-size: 12px; } .ds-metric-band b { color: var(--dashboard-primary); font-weight: 600; } .ds-metric-band article:hover { background: color-mix(in oklch, var(--muted) 45%, transparent); } .ds-metric-band article:focus-within { outline: 3px solid color-mix(in oklch, var(--ring) 35%, transparent); outline-offset: -3px; } @media (max-width: 640px) { .ds-metric-band { grid-template-columns: 1fr; } .ds-metric-band article + article { border-top: 1px solid var(--border); border-left: 0; } }"
+		}
+	],
+	"narrative": {
+		"northStar": "The Decision Brief",
+		"overview": "InsightFlow should feel like a calm operational briefing prepared for someone who must decide where to intervene. Warm paper-like space and cool blue-gray structure keep the environment credible and quiet; a concentrated indigo voice marks selection and action, while semantic colors make risk and progress immediately legible.\n\nThe interface is intentionally not a uniform dashboard mosaic. It moves through a decision story: organization state, the intervention that deserves attention, evidence and trends, then project-level health. Density is operational but measured, with clean lines, concise copy, tabular numbers, and responsive transformations that preserve scanability.",
+		"keyCharacteristics": [
+			"A decision sequence instead of a grid of equal-weight cards.",
+			"Warm white canvas, crisp evidence surfaces, and cool structural neutrals.",
+			"Indigo and violet accents used selectively for action, focus, and current state.",
+			"Green, amber, red, blue, and cyan signals paired with text or icons.",
+			"Manrope headings and Inter interface copy with restrained tracking.",
+			"Flat tonal layering, fine boundaries, and no decorative shadows at rest.",
+			"Persistent desktop sidebar; compact mobile header and bottom navigation."
+		],
+		"rules": [
+			{
+				"name": "The Scarce Accent Rule",
+				"body": "Indigo identifies selection, focus, action, or meaningful change; it is never a decorative fill pattern.",
+				"section": "colors"
+			},
+			{
+				"name": "The Evidence Has a Color Rule",
+				"body": "Semantic hues always travel with text, an icon, a label, or position so meaning never depends on color alone.",
+				"section": "colors"
+			},
+			{
+				"name": "The Two-Level Voice Rule",
+				"body": "Manrope names decisions and key evidence; Inter explains, labels, and lets people operate.",
+				"section": "typography"
+			},
+			{
+				"name": "The Decision-First Rule",
+				"body": "Order every dashboard from overall state to priority intervention, supporting evidence, and finally the health of individual projects.",
+				"section": "layout"
+			},
+			{
+				"name": "The Flat Evidence Rule",
+				"body": "A resting card earns hierarchy through placement, tone, and boundary—not a floating shadow.",
+				"section": "elevation"
+			},
+			{
+				"name": "The Contained Curve Rule",
+				"body": "Round the component enough to group it, never enough to make operational surfaces feel playful or pill-heavy.",
+				"section": "shapes"
+			},
+			{
+				"name": "The One Intervention Rule",
+				"body": "The darkest surface on the page is reserved for the single operational conclusion that should change what the user does next.",
+				"section": "components"
+			}
+		],
+		"dos": [
+			"Do preserve the state → intervention → evidence → project-health reading order.",
+			"Do use semantic CSS tokens for every product color and keep component code free of hardcoded palette values.",
+			"Do pair color with labels, icons, numbers, or placement for every status and trend.",
+			"Do use tabular numerals and aligned columns wherever people compare operational values.",
+			"Do transform dense tables into readable cards or focused rows on mobile.",
+			"Do reserve the Decision Brief for one evidence-backed conclusion and one next action."
+		],
+		"donts": [
+			"Don't turn the dashboard into a uniform mosaic of equal cards.",
+			"Don't use shadows to decorate resting dashboard surfaces or manufacture hierarchy.",
+			"Don't spread indigo across large areas when neutral structure can carry the layout.",
+			"Don't use red, amber, green, blue, or cyan as decoration detached from operational meaning.",
+			"Don't squeeze desktop tables, sidebars, or multi-column controls into the mobile viewport.",
+			"Don't introduce highly pill-shaped controls, oversized radii, gradients, or ornamental effects that weaken the calm briefing character."
+		]
+	}
+}

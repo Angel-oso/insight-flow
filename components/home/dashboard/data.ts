@@ -1,103 +1,111 @@
-import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, Inbox, MessageSquare, TrendingUp } from "lucide-react";
+import type { Project } from "@/lib/projects";
 
-export type Metric = {
-	label: string;
-	value: string;
-	detail: string;
-	icon: LucideIcon;
-	iconClassName: string;
-	detailClassName: string;
-};
-
-export const metrics: Metric[] = [
+export const metrics = [
 	{
 		label: "Feedback received",
 		value: "248",
-		detail: "+12.4% from last period",
-		icon: MessageSquare,
-		iconClassName: "bg-dashboard-primary-soft text-dashboard-primary",
-		detailClassName: "text-dashboard-success",
+		change: "+12.4%",
+		context: "vs. previous period",
+		tone: "primary",
 	},
 	{
 		label: "Open feedback",
 		value: "62",
-		detail: "18 require review",
-		icon: Inbox,
-		iconClassName: "bg-dashboard-info-soft text-dashboard-info",
-		detailClassName: "text-dashboard-info",
+		change: "25%",
+		context: "of all feedback",
+		tone: "info",
 	},
 	{
 		label: "Critical items",
 		value: "4",
-		detail: "Needs attention",
-		icon: AlertTriangle,
-		iconClassName: "bg-dashboard-danger-soft text-dashboard-danger",
-		detailClassName: "text-dashboard-danger",
+		change: "2 unassigned",
+		context: "requires intervention",
+		tone: "danger",
 	},
 	{
 		label: "Resolution rate",
 		value: "74%",
-		detail: "+5.2% from last period",
-		icon: TrendingUp,
-		iconClassName: "bg-dashboard-success-soft text-dashboard-success",
-		detailClassName: "text-dashboard-success",
+		change: "+5.2%",
+		context: "vs. previous period",
+		tone: "success",
 	},
-];
+] as const;
 
-export const trendValues = [
-	8, 13, 9, 14, 19, 23, 21, 17, 13, 10, 16, 21, 14, 16, 21, 24, 27, 20, 18, 27,
-	22, 17, 14, 16, 21, 24, 17, 17, 22, 26, 25, 34, 29, 36,
-];
+export const trendSeries = {
+	received: [
+		8, 11, 9, 14, 18, 21, 19, 15, 12, 17, 20, 16, 18, 22, 25, 20, 18, 24, 21,
+		17, 16, 20, 23, 19, 22, 25, 24, 29, 27, 34,
+	],
+	resolved: [
+		3, 5, 6, 7, 9, 10, 12, 10, 8, 11, 12, 13, 14, 15, 14, 16, 15, 17, 16, 14,
+		15, 17, 18, 19, 17, 20, 21, 22, 23, 25,
+	],
+};
+
+const trendStart = new Date("2026-04-24T00:00:00Z");
+
+export const trendRows = trendSeries.received.map((received, index) => {
+	const date = new Date(trendStart);
+	date.setUTCDate(trendStart.getUTCDate() + index);
+
+	return {
+		date: date.toLocaleDateString("en-US", {
+			month: "short",
+			day: "numeric",
+			timeZone: "UTC",
+		}),
+		received,
+		resolved: trendSeries.resolved[index],
+	};
+});
 
 export const statusItems = [
-	{ label: "New", value: 68, color: "var(--dashboard-info)" },
-	{ label: "In review", value: 54, color: "var(--dashboard-warning)" },
-	{ label: "Planned", value: 32, color: "var(--dashboard-avatar-three)" },
-	{ label: "In progress", value: 41, color: "var(--dashboard-primary)" },
-	{ label: "Completed", value: 38, color: "var(--dashboard-success)" },
-	{ label: "Discarded", value: 15, color: "var(--dashboard-danger)" },
-];
+	{ label: "New", value: 68, token: "var(--dashboard-info)" },
+	{ label: "In review", value: 54, token: "var(--dashboard-warning)" },
+	{ label: "Planned", value: 32, token: "var(--dashboard-avatar-three)" },
+	{ label: "In progress", value: 41, token: "var(--dashboard-primary)" },
+	{ label: "Completed", value: 38, token: "var(--dashboard-success)" },
+	{ label: "Discarded", value: 15, token: "var(--muted-foreground)" },
+] as const;
 
-export const attentionItems: {
-	priority: "Critical" | "High" | "Medium";
-	title: string;
-	project: string;
-	date: string;
-}[] = [
+export const attentionItems = [
 	{
 		priority: "Critical",
 		title: "Login failure on SSO",
 		project: "Client Portal",
-		date: "May 24",
+		reason: "Unassigned",
+		age: "3 days",
+	},
+	{
+		priority: "Critical",
+		title: "Checkout stalls after payment",
+		project: "Mobile App",
+		reason: "No activity",
+		age: "2 days",
 	},
 	{
 		priority: "High",
-		title: "Data export not working",
-		project: "Mobile App",
-		date: "May 22",
-	},
-	{
-		priority: "Medium",
-		title: "Dark mode option",
-		project: "Academy",
-		date: "May 20",
-	},
-	{
-		priority: "Medium",
-		title: "Bulk invites error",
+		title: "Invite links expire immediately",
 		project: "Client Portal",
-		date: "May 18",
+		reason: "Unassigned",
+		age: "5 days",
 	},
-];
+	{
+		priority: "High",
+		title: "Course progress not updating",
+		project: "Academy",
+		reason: "Stale",
+		age: "8 days",
+	},
+] as const;
 
-export const categories = [
+export const categoryItems = [
 	{ label: "Feature request", value: 102 },
 	{ label: "Bug", value: 68 },
 	{ label: "Improvement", value: 41 },
 	{ label: "Question", value: 24 },
 	{ label: "Other", value: 13 },
-];
+] as const;
 
 export const projects = [
 	{
@@ -106,9 +114,8 @@ export const projects = [
 		open: 32,
 		critical: 2,
 		resolution: "78%",
-		change: "+6.1%",
-		activity: "May 24, 2:18 PM",
-		health: "Good",
+		activity: "12 min ago",
+		health: "At risk",
 	},
 	{
 		name: "Mobile App",
@@ -116,9 +123,8 @@ export const projects = [
 		open: 18,
 		critical: 1,
 		resolution: "65%",
-		change: "-2.3%",
-		activity: "May 24, 11:07 AM",
-		health: "Fair",
+		activity: "1 hr ago",
+		health: "Needs attention",
 	},
 	{
 		name: "Academy",
@@ -126,45 +132,113 @@ export const projects = [
 		open: 12,
 		critical: 1,
 		resolution: "80%",
-		change: "+9.4%",
-		activity: "May 23, 4:35 PM",
-		health: "Good",
+		activity: "Yesterday",
+		health: "Healthy",
 	},
-];
+] as const;
 
 export const activities = [
 	{
 		initials: "SJ",
-		color: "bg-dashboard-avatar-one",
-		name: "Sarah Johnson",
-		action: 'marked feedback "Login failure on SSO"',
+		actor: "Sarah Johnson",
+		action: "moved Login failure on SSO to In review",
 		project: "Client Portal",
-		date: "May 24, 2:18 PM",
-		status: "In review",
+		time: "12 min ago",
+		tone: "primary",
 	},
 	{
-		initials: "MJ",
-		color: "bg-dashboard-avatar-two",
-		name: "Michael Chen",
-		action: 'added a comment on "Export to CSV"',
+		initials: "MC",
+		actor: "Michael Chen",
+		action: "commented on Data export not working",
 		project: "Mobile App",
-		date: "May 24, 11:02 AM",
+		time: "46 min ago",
+		tone: "neutral",
 	},
 	{
 		initials: "ER",
-		color: "bg-dashboard-avatar-three",
-		name: "Emma Rodriguez",
-		action: 'resolved "Typo in pricing page"',
+		actor: "Emma Rodriguez",
+		action: "completed Typo in pricing page",
 		project: "Academy",
-		date: "May 23, 4:35 PM",
-		status: "Completed",
+		time: "2 hr ago",
+		tone: "success",
 	},
 	{
 		initials: "DS",
-		color: "bg-dashboard-avatar-four",
-		name: "Daniel Smith",
-		action: 'created feedback "Bulk invite limit"',
+		actor: "Daniel Smith",
+		action: "raised Bulk invite limit to High priority",
 		project: "Client Portal",
-		date: "May 23, 9:41 AM",
+		time: "4 hr ago",
+		tone: "warning",
 	},
-];
+] as const;
+
+export type DashboardMetric = (typeof metrics)[number];
+export type DashboardTrendRow = (typeof trendRows)[number];
+export type DashboardStatusItem = (typeof statusItems)[number];
+export type DashboardCategoryItem = (typeof categoryItems)[number];
+export type DashboardAttentionItem = (typeof attentionItems)[number];
+export type DashboardActivity = (typeof activities)[number];
+export type DashboardProjectHealth = {
+	readonly name: string;
+	readonly received: number;
+	readonly open: number;
+	readonly critical: number;
+	readonly resolution: string;
+	readonly activity: string;
+	readonly health: "At risk" | "Needs attention" | "Healthy";
+};
+
+const dashboardScales: Record<string, number> = {
+	"client-portal": 1,
+	"mobile-app": 0.72,
+	academy: 0.48,
+};
+
+function scaleValue(value: number, scale: number) {
+	return Math.max(0, Math.round(value * scale));
+}
+
+export function getProjectDashboardData(project: Project) {
+	const scale = dashboardScales[project.slug] ?? 0;
+	const health = projects.find((candidate) => candidate.name === project.name);
+
+	return {
+		metrics: metrics.map((metric) => ({
+			...metric,
+			value:
+				metric.label === "Resolution rate"
+					? (health?.resolution ?? "—")
+					: String(scaleValue(Number(metric.value), scale)),
+		})) as readonly DashboardMetric[],
+		trendRows: trendRows.map((row) => ({
+			...row,
+			received: scaleValue(row.received, scale),
+			resolved: scaleValue(row.resolved, scale),
+		})) as readonly DashboardTrendRow[],
+		statusItems: statusItems.map((item) => ({
+			...item,
+			value: scaleValue(item.value, scale),
+		})) as readonly DashboardStatusItem[],
+		categoryItems: categoryItems.map((item) => ({
+			...item,
+			value: scaleValue(item.value, scale),
+		})) as readonly DashboardCategoryItem[],
+		attentionItems: attentionItems.filter(
+			(item) => item.project === project.name,
+		) as readonly DashboardAttentionItem[],
+		activities: activities.filter(
+			(activity) => activity.project === project.name,
+		) as readonly DashboardActivity[],
+		health:
+			health ??
+			({
+				name: project.name,
+				received: 0,
+				open: 0,
+				critical: 0,
+				resolution: "—",
+				activity: "No activity yet",
+				health: "Healthy",
+			} satisfies DashboardProjectHealth),
+	};
+}
