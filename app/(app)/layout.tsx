@@ -1,14 +1,14 @@
-import { AppNavigation } from "@/components/app-navigation"
+import { AppNavigation } from "@/components/app-navigation";
 
 export default function MainLayout({
-  children,
+	children,
 }: {
-  children: React.ReactNode
+	readonly children: React.ReactNode;
 }) {
-  return (
-    <>
-      <AppNavigation />
-      <main className="flex flex-1 flex-col p-4 md:p-6">{children}</main>
-    </>
-  )
+	return (
+		<>
+			<AppNavigation />
+			<main className="flex flex-1 flex-col">{children}</main>
+		</>
+	);
 }

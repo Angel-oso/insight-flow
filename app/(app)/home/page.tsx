@@ -1,24 +1,5 @@
-import React from 'react'
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card"
+import { Dashboard } from "@/components/home/dashboard";
 
-const Page = () => {
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Card Title</CardTitle>
-                <CardDescription>Card Description</CardDescription>
-            </CardHeader>
-            <CardContent>
-                Card Content
-            </CardContent>
-        </Card>
-    )
+export default function HomePage() {
+	return <Dashboard />;
 }
-
-export default Page
