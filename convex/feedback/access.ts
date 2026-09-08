@@ -57,3 +57,24 @@ export function requireCapability(
 	if (!hasCapability(role, capability))
 		throw new ConvexError("You cannot make this change.");
 }
+
+/**
+ * Bounded project feedback listing shared by workspace and overview reads.
+ * Projects stay small in this demo; the explicit cap keeps every reader
+ * honest instead of silently truncating.
+ */
+export async function listProjectFeedback(
+	ctx: QueryCtx,
+	projectId: Id<"projects">,
+) {
+	const items = await ctx.db
+		.query("feedback")
+		.withIndex("by_projectId_receivedAt", (q) => q.eq("projectId", projectId))
+		.order("desc")
+		.take(201);
+	if (items.length > 200)
+		throw new ConvexError(
+			"This demo supports up to 200 feedback items per project.",
+		);
+	return items;
+}

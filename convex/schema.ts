@@ -83,6 +83,7 @@ export default defineSchema({
 		completedAt: v.optional(v.number()),
 	})
 		.index("by_projectId_receivedAt", ["projectId", "receivedAt"])
+		.index("by_projectId_completedAt", ["projectId", "completedAt"])
 		.index("by_projectId_status", ["projectId", "status"])
 		.index("by_projectId_assigneeId", ["projectId", "assigneeId"]),
 	comments: defineTable({
@@ -106,4 +107,32 @@ export default defineSchema({
 	})
 		.index("by_projectId_createdAt", ["projectId", "createdAt"])
 		.index("by_feedbackId_createdAt", ["feedbackId", "createdAt"]),
+	// Display metadata for the feedback enums (text, rank/level, tone, chart
+	// token). Stored as JSON docs — one per taxonomy — so every surface reads
+	// the same labels and colors. Validation stays on the schema unions.
+	taxonomies: defineTable({
+		key: v.union(
+			v.literal("status"),
+			v.literal("category"),
+			v.literal("priority"),
+		),
+		label: v.string(),
+		items: v.array(
+			v.object({
+				value: v.string(),
+				label: v.string(),
+				rank: v.number(),
+				tone: v.union(
+					v.literal("primary"),
+					v.literal("info"),
+					v.literal("success"),
+					v.literal("warning"),
+					v.literal("danger"),
+					v.literal("muted"),
+				),
+				chartToken: v.optional(v.string()),
+				description: v.optional(v.string()),
+			}),
+		),
+	}).index("by_key", ["key"]),
 });

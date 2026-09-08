@@ -1,10 +1,12 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import {
+	listProjectFeedback,
 	requireCapability,
 	requireFeedback,
 	requireProject,
 } from "./feedback/access";
+import { getTaxonomies, taxonomiesValidator } from "./taxonomies";
 import schema from "./schema";
 
 const updateFields = schema.tables.feedback.validator
@@ -18,21 +20,12 @@ export const workspace = query({
 		role: schema.tables.memberships.validator.fields.role,
 		items: v.array(schema.doc("feedback")),
 		assignees: v.array(schema.doc("users")),
+		taxonomies: taxonomiesValidator,
 	}),
 	handler: async (ctx, { projectSlug }) => {
 		const { project, member } = await requireProject(ctx, projectSlug);
-		const items = await ctx.db
-			.query("feedback")
-			.withIndex("by_projectId_receivedAt", (q) =>
-				q.eq("projectId", project._id),
-			)
-			.order("desc")
-			.take(201);
+		const items = await listProjectFeedback(ctx, project._id);
 		// Keep the sample bounded without silently dropping rows or misreporting totals.
-		if (items.length > 200)
-			throw new ConvexError(
-				"This demo supports up to 200 feedback items per project.",
-			);
 		const links = await ctx.db
 			.query("projectMembers")
 			.withIndex("by_projectId_membershipId", (q) =>
@@ -49,7 +42,8 @@ export const workspace = query({
 			const user = await ctx.db.get("users", membership.userId);
 			if (user) assignees.push(user);
 		}
-		return { project, role: member.role, items, assignees };
+		const taxonomies = await getTaxonomies(ctx);
+		return { project, role: member.role, items, assignees, taxonomies };
 	},
 });
 

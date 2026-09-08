@@ -10,7 +10,9 @@
 
 import type * as feedback from "../feedback.js";
 import type * as feedback_access from "../feedback/access.js";
+import type * as overview from "../overview.js";
 import type * as seed from "../seed.js";
+import type * as taxonomies from "../taxonomies.js";
 
 import type {
   ApiFromModules,
@@ -21,7 +23,9 @@ import type {
 declare const fullApi: ApiFromModules<{
   feedback: typeof feedback;
   "feedback/access": typeof feedback_access;
+  overview: typeof overview;
   seed: typeof seed;
+  taxonomies: typeof taxonomies;
 }>;
 
 /**
