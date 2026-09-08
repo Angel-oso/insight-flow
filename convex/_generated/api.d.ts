@@ -8,13 +8,21 @@
  * @module
  */
 
+import type * as feedback from "../feedback.js";
+import type * as feedback_access from "../feedback/access.js";
+import type * as seed from "../seed.js";
+
 import type {
   ApiFromModules,
   FilterApi,
   FunctionReference,
 } from "convex/server";
 
-declare const fullApi: ApiFromModules<{}>;
+declare const fullApi: ApiFromModules<{
+  feedback: typeof feedback;
+  "feedback/access": typeof feedback_access;
+  seed: typeof seed;
+}>;
 
 /**
  * A utility for referencing Convex functions in your app's public API.
