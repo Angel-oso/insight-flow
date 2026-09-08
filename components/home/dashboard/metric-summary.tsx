@@ -1,12 +1,15 @@
 import {
+	CircleAlert,
+	CircleCheck,
 	CircleCheckBig,
+	CircleDotDashed,
 	Inbox,
 	MessageSquareText,
 	TriangleAlert,
 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import type { DashboardMetric } from "./data";
+import type { OverviewHealth, OverviewMetric } from "./model";
 
 const toneStyles = {
 	primary: "text-dashboard-primary",
@@ -36,11 +39,31 @@ const dividerStyles = [
 	"",
 ];
 
+const healthStyles = {
+	"At risk": {
+		className: "bg-dashboard-danger-soft text-dashboard-danger",
+		icon: CircleAlert,
+	},
+	"Needs attention": {
+		className: "bg-dashboard-warning-soft text-dashboard-warning-foreground",
+		icon: CircleDotDashed,
+	},
+	Healthy: {
+		className: "bg-dashboard-success-soft text-dashboard-success",
+		icon: CircleCheck,
+	},
+};
+
 export function MetricSummary({
 	metrics,
+	health,
 }: {
-	readonly metrics: readonly DashboardMetric[];
+	readonly metrics: readonly OverviewMetric[];
+	readonly health: OverviewHealth;
 }) {
+	const healthStyle = healthStyles[health.health];
+	const HealthIcon = healthStyle.icon;
+
 	return (
 		<section aria-label="Feedback summary">
 			<Card className="gap-0 rounded-xl py-0 shadow-none ring-foreground/8">
@@ -76,6 +99,20 @@ export function MetricSummary({
 						);
 					})}
 				</CardContent>
+				<div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t px-5 py-3 sm:px-6">
+					<span
+						className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold ${healthStyle.className}`}
+					>
+						<HealthIcon className="size-3.5" />
+						{health.health}
+					</span>
+					<span className="text-xs text-muted-foreground">
+						Last activity {health.activity}
+					</span>
+					<span className="ml-auto text-xs text-muted-foreground">
+						Health rules: critical items and open backlog
+					</span>
+				</div>
 			</Card>
 		</section>
 	);

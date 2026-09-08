@@ -2,14 +2,14 @@ import { ArrowUpRight } from "lucide-react";
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { CategoriesChart, StatusDonutChart } from "./charts";
-import type { DashboardCategoryItem, DashboardStatusItem } from "./data";
+import type { OverviewCategoryItem, OverviewStatusItem } from "./model";
 
 export function StatusPanel({
 	categories,
 	statuses,
 }: {
-	readonly categories: readonly DashboardCategoryItem[];
-	readonly statuses: readonly DashboardStatusItem[];
+	readonly categories: readonly OverviewCategoryItem[];
+	readonly statuses: readonly OverviewStatusItem[];
 }) {
 	const total = statuses.reduce((sum, item) => sum + item.value, 0);
 	const leadingCategory = categories[0]?.label ?? "No data";

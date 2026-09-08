@@ -2,7 +2,7 @@ import { Check, Circle, MessageSquare, MoveRight } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import type { DashboardActivity } from "./data";
+import type { OverviewActivity } from "./model";
 
 const avatarStyles = {
 	primary: "bg-dashboard-primary-soft text-dashboard-primary",
@@ -21,10 +21,10 @@ const activityIcons = {
 export function ActivityFeed({
 	activities,
 }: {
-	readonly activities: readonly DashboardActivity[];
+	readonly activities: readonly OverviewActivity[];
 }) {
 	return (
-		<Card className="gap-0 rounded-xl py-0 shadow-none ring-foreground/8">
+		<Card className="flex h-full flex-col gap-0 rounded-xl py-0 shadow-none ring-foreground/8">
 			<CardHeader className="border-b px-5 py-5">
 				<h2 className="font-heading text-lg font-semibold tracking-[-0.025em]">
 					Recent activity
@@ -33,16 +33,13 @@ export function ActivityFeed({
 					Changes with the greatest operational relevance.
 				</p>
 			</CardHeader>
-			<CardContent className="p-5">
-				<ol className="space-y-5">
+			<CardContent className="flex min-h-0 flex-1 flex-col p-5">
+				<ol className="max-h-[26rem] min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
 					{activities.length > 0 ? (
 						activities.map((activity) => {
 							const ActivityIcon = activityIcons[activity.tone];
 							return (
-								<li
-									key={`${activity.actor}-${activity.time}`}
-									className="flex gap-3"
-								>
+								<li key={activity.id} className="flex gap-3">
 									<Avatar className="size-8 rounded-lg">
 										<AvatarFallback
 											className={`rounded-lg text-[10px] font-semibold ${avatarStyles[activity.tone]}`}

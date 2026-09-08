@@ -33,7 +33,13 @@ export function DashboardHeader({ project }: { readonly project: Project }) {
 					Last 30 days
 					<ChevronDown data-icon="inline-end" />
 				</Button>
-				<Button variant="outline" size="lg" className="bg-background" disabled>
+				<Button
+					variant="outline"
+					size="lg"
+					nativeButton={false}
+					render={<Link href={projectPath(project.slug, "feedback")} />}
+					className="bg-background"
+				>
 					<Inbox data-icon="inline-start" />
 					View feedback
 				</Button>

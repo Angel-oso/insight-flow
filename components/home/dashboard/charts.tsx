@@ -10,10 +10,10 @@ import { scalePoint } from "@tanstack/charts/scales/point";
 import { tooltip } from "@tanstack/charts/tooltip";
 
 import type {
-	DashboardCategoryItem,
-	DashboardStatusItem,
-	DashboardTrendRow,
-} from "./data";
+	OverviewCategoryItem,
+	OverviewStatusItem,
+	OverviewTrendRow,
+} from "./model";
 
 const chartTheme = {
 	background: "var(--card)",
@@ -29,17 +29,10 @@ const chartTheme = {
 	],
 } as const;
 
-const visibleTrendDates = [
-	"Apr 24",
-	"Apr 29",
-	"May 4",
-	"May 9",
-	"May 14",
-	"May 19",
-	"May 23",
-];
-
-function createTrendChart(rows: readonly DashboardTrendRow[]) {
+function createTrendChart(
+	rows: readonly OverviewTrendRow[],
+	ticks: readonly string[],
+) {
 	return defineChart({
 		marks: [
 			lineY(rows, {
@@ -61,7 +54,7 @@ function createTrendChart(rows: readonly DashboardTrendRow[]) {
 			x: {
 				scale: () => scalePoint<string>().padding(0.08),
 				axis: {
-					ticks: { values: visibleTrendDates, size: 0, padding: 10 },
+					ticks: { values: [...ticks], size: 0, padding: 10 },
 					tickLabels: { fontSize: 11, thin: { priority: "ends" } },
 				},
 			},
@@ -82,7 +75,7 @@ function createTrendChart(rows: readonly DashboardTrendRow[]) {
 	});
 }
 
-function createStatusChart(items: readonly DashboardStatusItem[]) {
+function createStatusChart(items: readonly OverviewStatusItem[]) {
 	const statusSlices = pie(items, { value: "value", gapAngle: 0.025 });
 	return defineChart({
 		marks: [
@@ -108,7 +101,7 @@ function createStatusChart(items: readonly DashboardStatusItem[]) {
 	});
 }
 
-function createCategoriesChart(items: readonly DashboardCategoryItem[]) {
+function createCategoriesChart(items: readonly OverviewCategoryItem[]) {
 	const leadingCategories = items.slice(0, 4);
 	return defineChart({
 		marks: [
@@ -155,17 +148,19 @@ function createCategoriesChart(items: readonly DashboardCategoryItem[]) {
 
 export function FeedbackTrendChart({
 	rows,
+	ticks,
 }: {
-	readonly rows: readonly DashboardTrendRow[];
+	readonly rows: readonly OverviewTrendRow[];
+	readonly ticks: readonly string[];
 }) {
-	const trendChart = createTrendChart(rows);
+	const trendChart = createTrendChart(rows, ticks);
 
 	return (
 		<Chart
 			definition={trendChart}
 			height={260}
 			initialWidth={720}
-			ariaLabel="Feedback received and resolved over the last 30 days"
+			ariaLabel="Feedback received and resolved over the selected period"
 			ariaDescription="Two-line chart comparing daily received feedback with resolved feedback."
 			className="w-full"
 		/>
@@ -176,7 +171,7 @@ export function StatusDonutChart({
 	items,
 	total,
 }: {
-	readonly items: readonly DashboardStatusItem[];
+	readonly items: readonly OverviewStatusItem[];
 	readonly total: number;
 }) {
 	const statusChart = createStatusChart(items);
@@ -208,7 +203,7 @@ export function StatusDonutChart({
 export function CategoriesChart({
 	items,
 }: {
-	readonly items: readonly DashboardCategoryItem[];
+	readonly items: readonly OverviewCategoryItem[];
 }) {
 	const categoriesChart = createCategoriesChart(items);
 

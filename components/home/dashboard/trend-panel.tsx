@@ -2,12 +2,16 @@ import { ArrowUpRight, CircleHelp } from "lucide-react";
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { FeedbackTrendChart } from "./charts";
-import type { DashboardTrendRow } from "./data";
+import type { OverviewTrendRow } from "./model";
 
 export function TrendPanel({
 	rows,
+	ticks,
+	pace,
 }: {
-	readonly rows: readonly DashboardTrendRow[];
+	readonly rows: readonly OverviewTrendRow[];
+	readonly ticks: readonly string[];
+	readonly pace: string | null;
 }) {
 	return (
 		<Card className="gap-0 rounded-xl py-0 shadow-none ring-foreground/8">
@@ -37,13 +41,15 @@ export function TrendPanel({
 							Resolved
 						</span>
 					</div>
-					<p className="flex items-center gap-1 text-xs font-medium text-dashboard-success">
-						<ArrowUpRight className="size-3.5" />
-						Resolution pace improved 5.2%
-					</p>
+					{pace ? (
+						<p className="flex items-center gap-1 text-xs font-medium text-dashboard-success">
+							<ArrowUpRight className="size-3.5" />
+							{pace}
+						</p>
+					) : null}
 				</div>
 				<figure className="min-w-0 overflow-hidden">
-					<FeedbackTrendChart rows={rows} />
+					<FeedbackTrendChart rows={rows} ticks={ticks} />
 				</figure>
 			</CardContent>
 		</Card>

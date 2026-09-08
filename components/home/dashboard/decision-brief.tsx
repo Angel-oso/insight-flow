@@ -1,7 +1,8 @@
 import { ArrowRight, ShieldAlert } from "lucide-react";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import type { Project } from "@/lib/projects";
+import { type Project, projectPath } from "@/lib/projects";
 
 export function DecisionBrief({
 	project,
@@ -30,8 +31,9 @@ export function DecisionBrief({
 				<Button
 					variant="secondary"
 					size="lg"
+					nativeButton={false}
+					render={<Link href={projectPath(project.slug, "feedback")} />}
 					className="w-full bg-background text-foreground lg:w-auto"
-					disabled
 				>
 					Review priority queue <ArrowRight data-icon="inline-end" />
 				</Button>

@@ -1,22 +1,30 @@
 import { ArrowRight, Clock3, UserRoundX } from "lucide-react";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import type { DashboardAttentionItem } from "./data";
+import { projectPath } from "@/lib/projects";
+import { taxonomyToneBadge, type TaxonomyTone } from "@/lib/taxonomy";
+import type { OverviewAttentionItem } from "./model";
 
-const priorityStyles = {
-	Critical:
-		"border-dashboard-danger/25 bg-dashboard-danger-soft text-dashboard-danger",
-	High: "border-dashboard-warning/30 bg-dashboard-warning-soft text-dashboard-warning-foreground",
+const toneBorders: Record<TaxonomyTone, string> = {
+	primary: "border-dashboard-primary/25",
+	info: "border-dashboard-info/25",
+	success: "border-dashboard-success/25",
+	warning: "border-dashboard-warning/30",
+	danger: "border-dashboard-danger/25",
+	muted: "border-border",
 };
 
 export function AttentionQueue({
 	items,
+	projectSlug,
 }: {
-	readonly items: readonly DashboardAttentionItem[];
+	readonly items: readonly OverviewAttentionItem[];
+	readonly projectSlug: string;
 }) {
 	return (
-		<Card className="gap-0 rounded-xl py-0 shadow-none ring-foreground/8">
+		<Card className="flex h-full flex-col gap-0 rounded-xl py-0 shadow-none ring-foreground/8">
 			<CardHeader className="flex flex-row items-start justify-between border-b px-5 py-5 sm:px-6">
 				<div>
 					<h2 className="font-heading text-lg font-semibold tracking-[-0.025em]">
@@ -30,46 +38,41 @@ export function AttentionQueue({
 					{items.length} items
 				</span>
 			</CardHeader>
-			<CardContent className="px-0 pb-0">
-				<ul className="divide-y">
+			<CardContent className="flex min-h-0 flex-1 flex-col px-0 pb-0">
+				<ul className="max-h-[26rem] min-h-0 flex-1 divide-y overflow-y-auto">
 					{items.length > 0 ? (
 						items.map((item) => (
-							<li
-								key={item.title}
-								className="group grid gap-3 px-5 py-4 transition-colors hover:bg-muted/45 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-6"
-							>
-								<div className="min-w-0">
-									<div className="flex items-center gap-2">
-										<span
-											className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${priorityStyles[item.priority]}`}
-										>
-											{item.priority}
-										</span>
-										<p className="truncate text-sm font-semibold">
-											{item.title}
-										</p>
-									</div>
-									<div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-										<span>{item.project}</span>
-										<span className="flex items-center gap-1">
-											<UserRoundX className="size-3" />
-											{item.reason}
-										</span>
-										<span className="flex items-center gap-1">
-											<Clock3 className="size-3" />
-											{item.age}
-										</span>
-									</div>
-								</div>
-								<Button
-									disabled
+							<li key={item.id}>
+								<Link
+									href={`${projectPath(projectSlug, "feedback")}?feedback=${item.id}`}
 									aria-label={`Review ${item.title}`}
-									variant="ghost"
-									size="icon-sm"
-									className="justify-self-end text-muted-foreground"
+									className="group grid gap-3 px-5 py-4 outline-none transition-colors hover:bg-muted/45 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-6"
 								>
-									<ArrowRight />
-								</Button>
+									<div className="min-w-0">
+										<div className="flex items-center gap-2">
+											<span
+												className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${taxonomyToneBadge[item.tone]} ${item.rank >= 2 ? toneBorders[item.tone] : "border-transparent"}`}
+											>
+												{item.priorityLabel}
+											</span>
+											<p className="truncate text-sm font-semibold">
+												{item.title}
+											</p>
+										</div>
+										<div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+											<span>{item.project}</span>
+											<span className="flex items-center gap-1">
+												<UserRoundX className="size-3" />
+												{item.reason}
+											</span>
+											<span className="flex items-center gap-1">
+												<Clock3 className="size-3" />
+												{item.age}
+											</span>
+										</div>
+									</div>
+									<ArrowRight className="size-4 justify-self-end text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+								</Link>
 							</li>
 						))
 					) : (
@@ -82,8 +85,9 @@ export function AttentionQueue({
 					<Button
 						variant="link"
 						size="sm"
+						nativeButton={false}
+						render={<Link href={projectPath(projectSlug, "feedback")} />}
 						className="h-auto px-0 text-dashboard-primary"
-						disabled
 					>
 						Open triage queue <ArrowRight data-icon="inline-end" />
 					</Button>
