@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
+import { ensureTaxonomies } from "./taxonomies";
 
 const members = [
 	{ name: "Sarah Johnson", email: "sarah@example.com", role: "admin" },
@@ -114,6 +115,8 @@ export const run = internalMutation({
 		organizationId: v.id("organizations"),
 	}),
 	handler: async (ctx) => {
+		// Display taxonomies always exist, even on databases seeded before them.
+		await ensureTaxonomies(ctx);
 		const existing = await ctx.db
 			.query("organizations")
 			.withIndex("by_slug", (q) => q.eq("slug", "acme-studio-demo"))
