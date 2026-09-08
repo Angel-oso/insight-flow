@@ -1,6 +1,14 @@
 "use client";
 
-import { Check, ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
+import {
+	Check,
+	ChevronDown,
+	ChevronLeft,
+	ChevronRight,
+	Search,
+	SlidersHorizontal,
+	X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +24,7 @@ import type {
 	FeedbackCategory,
 	FeedbackPriority,
 	FeedbackStatus,
-} from "./data";
+} from "./model";
 
 type DateRange = "Any time" | "Past 7 days" | "Past 30 days";
 
@@ -75,10 +83,20 @@ export function FeedbackFilters({
 	filters,
 	onFiltersChange,
 	onReset,
+	page,
+	pageCount,
+	pageSize,
+	totalItems,
+	onPageChange,
 }: {
 	readonly filters: FeedbackFiltersState;
 	readonly onFiltersChange: (filters: FeedbackFiltersState) => void;
 	readonly onReset: () => void;
+	readonly page: number;
+	readonly pageCount: number;
+	readonly pageSize: number;
+	readonly totalItems: number;
+	readonly onPageChange: (page: number) => void;
 }) {
 	const hasActiveFilters =
 		filters.query.length > 0 ||
@@ -168,6 +186,39 @@ export function FeedbackFilters({
 							<X data-icon="inline-start" />
 							Clear
 						</Button>
+					) : null}
+					{pageCount > 1 ? (
+						<div className="flex items-center gap-1 xl:border-l xl:border-border xl:pl-2">
+							<span className="mr-1 text-xs text-muted-foreground">
+								{(page - 1) * pageSize + 1}–
+								{Math.min(page * pageSize, totalItems)} of {totalItems}
+							</span>
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon-sm"
+								disabled={page === 1}
+								onClick={() => onPageChange(page - 1)}
+								aria-label="Previous page"
+								title="Previous page"
+							>
+								<ChevronLeft />
+							</Button>
+							<span className="min-w-14 text-center text-xs text-muted-foreground">
+								{page}/{pageCount}
+							</span>
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon-sm"
+								disabled={page === pageCount}
+								onClick={() => onPageChange(page + 1)}
+								aria-label="Next page"
+								title="Next page"
+							>
+								<ChevronRight />
+							</Button>
+						</div>
 					) : null}
 				</div>
 			</div>

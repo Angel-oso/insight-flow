@@ -1,14 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { parseAsString, useQueryState } from "nuqs";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { hasCapability, type Role } from "@/lib/auth/permissions";
 import type { Project } from "@/lib/projects";
-import type { FeedbackActivity, FeedbackComment, FeedbackItem } from "./data";
-import { assignees, feedbackActivity, feedbackComments } from "./data";
+import type { Assignee, FeedbackItem } from "./model";
+import { useFeedbackDetail, useFeedbackWrites } from "./use-feedback";
 import { FeedbackDetail, type FeedbackPermissions } from "./feedback-detail";
 import { FeedbackFilters, type FeedbackFiltersState } from "./feedback-filters";
-import { FeedbackList } from "./feedback-list";
+import { FEEDBACK_PAGE_SIZE, FeedbackList } from "./feedback-list";
 
 const defaultFilters: FeedbackFiltersState = {
 	query: "",
@@ -19,48 +20,57 @@ const defaultFilters: FeedbackFiltersState = {
 	attentionOnly: false,
 };
 
+const DETAIL_MOBILE_QUERY = "(max-width: 1023px)";
+
+function subscribeToDetailViewport(onStoreChange: () => void) {
+	const mediaQuery = window.matchMedia(DETAIL_MOBILE_QUERY);
+	mediaQuery.addEventListener("change", onStoreChange);
+	return () => mediaQuery.removeEventListener("change", onStoreChange);
+}
+
+function getDetailViewportSnapshot() {
+	return window.matchMedia(DETAIL_MOBILE_QUERY).matches;
+}
+
+function getDetailViewportServerSnapshot() {
+	return false;
+}
+
 export function FeedbackWorkspace({
-	initialItems,
+	items,
+	assignees,
+	now,
+	archived,
 	project,
 	role,
 }: {
-	readonly initialItems: readonly FeedbackItem[];
+	readonly items: readonly FeedbackItem[];
+	readonly assignees: readonly Assignee[];
+	readonly now: number;
+	readonly archived: boolean;
 	readonly project: Project;
 	readonly role: Role;
 }) {
 	const roleLabel =
 		role === "admin" ? "Admin" : role === "manager" ? "Manager" : "Member";
+	const { pending, error, updateFeedback, addComment } = useFeedbackWrites(
+		project.slug,
+	);
 	const permissions: FeedbackPermissions = {
-		canTriage: hasCapability(role, "feedback.triage"),
-		canAssign: hasCapability(role, "feedback.assign"),
-		canUpdate: hasCapability(role, "feedback.update"),
-		canComment: hasCapability(role, "feedback.comment"),
+		canTriage: !archived && !pending && hasCapability(role, "feedback.triage"),
+		canAssign: !archived && !pending && hasCapability(role, "feedback.assign"),
+		canUpdate: !archived && !pending && hasCapability(role, "feedback.update"),
+		canComment:
+			!archived && !pending && hasCapability(role, "feedback.comment"),
 	};
-	const [items, setItems] = useState<FeedbackItem[]>(() =>
-		initialItems.map((item) => ({ ...item })),
-	);
 	const [filters, setFilters] = useState<FeedbackFiltersState>(defaultFilters);
-	const [selectedId, setSelectedId] = useState<string | null>(
-		initialItems[0]?.id ?? null,
-	);
+	const [selectedId, setSelectedId] = useQueryState("feedback", parseAsString);
 	const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
-	const [comments, setComments] = useState<Record<string, FeedbackComment[]>>(
-		() =>
-			Object.fromEntries(
-				Object.entries(feedbackComments).map(([id, values]) => [
-					id,
-					[...values],
-				]),
-			),
+	const isDetailMobile = useSyncExternalStore(
+		subscribeToDetailViewport,
+		getDetailViewportSnapshot,
+		getDetailViewportServerSnapshot,
 	);
-	const [activities, setActivities] = useState<
-		Record<string, FeedbackActivity[]>
-	>(() =>
-		Object.fromEntries(
-			Object.entries(feedbackActivity).map(([id, values]) => [id, [...values]]),
-		),
-	);
-
 	const visibleItems = useMemo(
 		() =>
 			items.filter((item) => {
@@ -82,10 +92,12 @@ export function FeedbackWorkspace({
 					(filters.dateRange === "Past 7 days" && item.ageDays <= 7) ||
 					(filters.dateRange === "Past 30 days" && item.ageDays <= 30);
 				const needsAttention =
-					item.priority === "Critical" ||
-					item.priority === "High" ||
-					item.assigneeId === null ||
-					item.isStale;
+					item.status !== "Completed" &&
+					item.status !== "Discarded" &&
+					(item.priority === "Critical" ||
+						item.priority === "High" ||
+						item.assigneeId === null ||
+						item.isStale);
 
 				return (
 					matchesQuery &&
@@ -99,75 +111,82 @@ export function FeedbackWorkspace({
 		[filters, items],
 	);
 
-	const selectedItem =
-		visibleItems.find((item) => item.id === selectedId) ??
-		visibleItems[0] ??
-		null;
-
-	const updateFeedback = (
-		id: string,
-		update: Partial<
-			Pick<FeedbackItem, "category" | "priority" | "status" | "assigneeId">
-		>,
-		activity: Pick<FeedbackActivity, "message" | "tone">,
-	) => {
-		setItems((currentItems) =>
-			currentItems.map((item) =>
-				item.id === id ? { ...item, ...update, updatedAt: "Just now" } : item,
-			),
+	const selectedItem = items.find((item) => item.id === selectedId) ?? null;
+	const [pageState, setPageState] = useState(() => {
+		const selectedIndex = visibleItems.findIndex(
+			(item) => item.id === selectedId,
 		);
-		setActivities((currentActivities) => ({
-			...currentActivities,
-			[id]: [
-				{
-					id: `activity-${Date.now()}`,
-					message: activity.message,
-					time: "Just now",
-					tone: activity.tone,
-				},
-				...(currentActivities[id] ?? []),
-			],
-		}));
+		return {
+			page:
+				selectedIndex === -1
+					? 1
+					: Math.floor(selectedIndex / FEEDBACK_PAGE_SIZE) + 1,
+			selectedId,
+		};
+	});
+	const pageCount = Math.max(
+		1,
+		Math.ceil(visibleItems.length / FEEDBACK_PAGE_SIZE),
+	);
+	const selectedPage =
+		pageState.selectedId === selectedId
+			? null
+			: (() => {
+				const selectedIndex = visibleItems.findIndex(
+					(item) => item.id === selectedId,
+				);
+				return selectedIndex === -1
+					? 1
+					: Math.floor(selectedIndex / FEEDBACK_PAGE_SIZE) + 1;
+			})();
+	const page = Math.min(selectedPage ?? pageState.page, pageCount);
+	const paginatedItems = useMemo(
+		() =>
+			visibleItems.slice(
+				(page - 1) * FEEDBACK_PAGE_SIZE,
+				page * FEEDBACK_PAGE_SIZE,
+			),
+		[page, visibleItems],
+	);
+	const detail = useFeedbackDetail(
+		project.slug,
+		selectedItem?.id ?? null,
+		project.name,
+		now,
+	);
+	const detailItem = detail?.item ?? selectedItem;
+
+	useEffect(() => {
+		if (selectedId !== null && !selectedItem) void setSelectedId(null);
+	}, [selectedId, selectedItem, setSelectedId]);
+
+	const updateFilters = (nextFilters: FeedbackFiltersState) => {
+		setFilters(nextFilters);
+		setPageState({ page: 1, selectedId });
 	};
 
-	const addComment = (id: string, body: string) => {
-		setComments((currentComments) => ({
-			...currentComments,
-			[id]: [
-				{
-					id: `comment-${Date.now()}`,
-					author: "Alex Johnson",
-					initials: "AJ",
-					body,
-					time: "Just now",
-				},
-				...(currentComments[id] ?? []),
-			],
-		}));
-		setItems((currentItems) =>
-			currentItems.map((item) =>
-				item.id === id ? { ...item, updatedAt: "Just now" } : item,
-			),
-		);
-		setActivities((currentActivities) => ({
-			...currentActivities,
-			[id]: [
-				{
-					id: `activity-${Date.now()}`,
-					message: "Alex Johnson added an internal note",
-					time: "Just now",
-					tone: "primary",
-				},
-				...(currentActivities[id] ?? []),
-			],
-		}));
-	};
-
-	const selectFeedback = (id: string) => {
-		setSelectedId(id);
-		if (window.matchMedia("(max-width: 1023px)").matches) {
+	const selectFeedback = (id: FeedbackItem["id"]) => {
+		void setSelectedId(id);
+		const selectedIndex = visibleItems.findIndex((item) => item.id === id);
+		setPageState({
+			page:
+				selectedIndex === -1
+					? 1
+					: Math.floor(selectedIndex / FEEDBACK_PAGE_SIZE) + 1,
+			selectedId: id,
+		});
+		if (isDetailMobile) {
 			setMobileDetailOpen(true);
 		}
+	};
+
+	const handlePageChange = (nextPage: number) => {
+		setPageState({ page: nextPage, selectedId });
+	};
+
+	const handleMobileDetailChange = (open: boolean) => {
+		setMobileDetailOpen(open);
+		if (!open) void setSelectedId(null);
 	};
 
 	return (
@@ -187,42 +206,69 @@ export function FeedbackWorkspace({
 					</p>
 				</div>
 			</div>
+			{error ? (
+				<p role="alert" className="px-5 py-3 text-destructive">
+					{error}
+				</p>
+			) : null}
+			{archived ? (
+				<p className="px-5 py-3 text-muted-foreground">
+					This project is archived. Feedback is read-only.
+				</p>
+			) : null}
 			<FeedbackFilters
 				filters={filters}
-				onFiltersChange={setFilters}
-				onReset={() => setFilters(defaultFilters)}
+				onFiltersChange={updateFilters}
+				onReset={() => updateFilters(defaultFilters)}
+				page={page}
+				pageCount={pageCount}
+				pageSize={FEEDBACK_PAGE_SIZE}
+				totalItems={visibleItems.length}
+				onPageChange={handlePageChange}
 			/>
 			<div className="grid min-w-0 lg:grid-cols-[minmax(0,1.35fr)_minmax(350px,0.65fr)]">
 				<div className="min-w-0">
 					<FeedbackList
-						items={visibleItems}
+						items={paginatedItems}
 						selectedId={selectedItem?.id ?? null}
 						assignees={assignees}
 						onSelect={selectFeedback}
 					/>
 				</div>
-				<div className="hidden lg:block">
+				<div className="hidden min-h-0 lg:sticky lg:top-6 lg:block lg:max-h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto">
 					<FeedbackDetail
-						item={selectedItem}
+						key={detailItem?.id ?? "empty"}
+						item={detailItem}
+						loading={Boolean(selectedItem) && !detail}
+						pending={pending}
 						assignees={assignees}
-						comments={selectedItem ? (comments[selectedItem.id] ?? []) : []}
-						activities={selectedItem ? (activities[selectedItem.id] ?? []) : []}
+						comments={detail?.comments ?? []}
+						activities={detail?.activities ?? []}
 						permissions={permissions}
 						onUpdate={updateFeedback}
 						onAddComment={addComment}
 					/>
 				</div>
 			</div>
-			<Sheet open={mobileDetailOpen} onOpenChange={setMobileDetailOpen}>
+			<Sheet
+				open={
+					isDetailMobile && (mobileDetailOpen || selectedId !== null)
+				}
+				onOpenChange={handleMobileDetailChange}
+			>
 				<SheetContent
 					side="right"
 					className="w-full max-w-none overflow-y-auto p-0 sm:max-w-none lg:hidden"
 				>
+					<SheetTitle className="sr-only">Feedback details</SheetTitle>
 					<FeedbackDetail
-						item={selectedItem}
+						key={detailItem?.id ?? "empty"}
+						item={detailItem}
+						loading={Boolean(selectedItem) && !detail}
+						pending={pending}
 						assignees={assignees}
-						comments={selectedItem ? (comments[selectedItem.id] ?? []) : []}
-						activities={selectedItem ? (activities[selectedItem.id] ?? []) : []}
+						comments={detail?.comments ?? []}
+						activities={detail?.activities ?? []}
 						permissions={permissions}
 						onUpdate={updateFeedback}
 						onAddComment={addComment}
@@ -230,8 +276,7 @@ export function FeedbackWorkspace({
 				</SheetContent>
 			</Sheet>
 			<p className="border-t px-5 py-3 text-xs text-muted-foreground">
-				Illustrative {project.name} data · Admin capabilities are wired here so
-				future role scopes can reuse the same workflow.
+				Shared demo workspace · Changes are saved automatically.
 			</p>
 		</section>
 	);

@@ -2,7 +2,7 @@ import type {
 	FeedbackCategory,
 	FeedbackPriority,
 	FeedbackStatus,
-} from "./data";
+} from "./model";
 
 const priorityStyles: Record<FeedbackPriority, string> = {
 	Low: "bg-muted text-muted-foreground",

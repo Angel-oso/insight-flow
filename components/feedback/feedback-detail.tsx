@@ -28,12 +28,12 @@ import type {
 	FeedbackItem,
 	FeedbackPriority,
 	FeedbackStatus,
-} from "./data";
+} from "./model";
 import {
 	feedbackCategories,
 	feedbackPriorities,
 	feedbackStatuses,
-} from "./data";
+} from "./model";
 import { FeedbackTag } from "./feedback-meta";
 
 const activityStyles: Record<FeedbackActivity["tone"], string> = {
@@ -131,18 +131,24 @@ export function FeedbackDetail({
 	permissions,
 	onUpdate,
 	onAddComment,
+	loading,
+	pending,
 }: {
 	readonly item: FeedbackItem | null;
+	readonly loading: boolean;
+	readonly pending: boolean;
 	readonly assignees: readonly Assignee[];
 	readonly comments: readonly FeedbackComment[];
 	readonly activities: readonly FeedbackActivity[];
 	readonly permissions: FeedbackPermissions;
 	readonly onUpdate: (
-		id: string,
+		id: FeedbackItem["id"],
 		update: Update,
-		activity: Pick<FeedbackActivity, "message" | "tone">,
-	) => void;
-	readonly onAddComment: (id: string, body: string) => void;
+	) => Promise<boolean>;
+	readonly onAddComment: (
+		id: FeedbackItem["id"],
+		body: string,
+	) => Promise<boolean>;
 }) {
 	const [note, setNote] = useState("");
 
@@ -184,12 +190,11 @@ export function FeedbackDetail({
 		})),
 	];
 
-	const submitNote = () => {
+	const submitNote = async () => {
 		const body = note.trim();
 		if (!body) return;
 
-		onAddComment(item.id, body);
-		setNote("");
+		if (await onAddComment(item.id, body)) setNote("");
 	};
 
 	return (
@@ -214,7 +219,7 @@ export function FeedbackDetail({
 					<FeedbackTag value={item.status} kind="status" />
 					{item.isStale ? (
 						<span className="inline-flex h-6 items-center rounded-md bg-dashboard-warning-soft px-2 text-xs font-medium text-dashboard-warning-foreground">
-							Stale · {item.ageDays} days
+							Stale · {item.inactiveDays} days
 						</span>
 					) : null}
 				</div>
@@ -238,14 +243,7 @@ export function FeedbackDetail({
 							options={categoryOptions}
 							disabled={!permissions.canTriage}
 							onValueChange={(category) =>
-								onUpdate(
-									item.id,
-									{ category: category ?? item.category },
-									{
-										message: `Category set to ${category ?? item.category}`,
-										tone: "primary",
-									},
-								)
+								onUpdate(item.id, { category: category ?? item.category })
 							}
 						/>
 					</DetailField>
@@ -256,14 +254,7 @@ export function FeedbackDetail({
 							options={priorityOptions}
 							disabled={!permissions.canTriage}
 							onValueChange={(priority) =>
-								onUpdate(
-									item.id,
-									{ priority: priority ?? item.priority },
-									{
-										message: `Priority set to ${priority ?? item.priority}`,
-										tone: "warning",
-									},
-								)
+								onUpdate(item.id, { priority: priority ?? item.priority })
 							}
 						/>
 					</DetailField>
@@ -274,14 +265,7 @@ export function FeedbackDetail({
 							options={statusOptions}
 							disabled={!permissions.canUpdate}
 							onValueChange={(status) =>
-								onUpdate(
-									item.id,
-									{ status: status ?? item.status },
-									{
-										message: `Status moved to ${status ?? item.status}`,
-										tone: status === "Completed" ? "success" : "primary",
-									},
-								)
+								onUpdate(item.id, { status: status ?? item.status })
 							}
 						/>
 					</DetailField>
@@ -293,20 +277,7 @@ export function FeedbackDetail({
 							options={assigneeOptions}
 							disabled={!permissions.canAssign}
 							onValueChange={(assigneeId) => {
-								const nextAssignee = assignees.find(
-									(candidate) => candidate.id === assigneeId,
-								);
-
-								onUpdate(
-									item.id,
-									{ assigneeId },
-									{
-										message: nextAssignee
-											? `${nextAssignee.name} assigned as owner`
-											: "Owner unassigned",
-										tone: "primary",
-									},
-								);
+								void onUpdate(item.id, { assigneeId });
 							}}
 						/>
 					</DetailField>
@@ -347,11 +318,15 @@ export function FeedbackDetail({
 							Internal discussion
 						</h3>
 						<span className="text-xs text-muted-foreground">
-							Only your team can see this
+							Shared demo discussion
 						</span>
 					</div>
 					<div className="mt-3 space-y-3">
-						{comments.length > 0 ? (
+						{loading ? (
+							<p role="status" className="text-sm text-muted-foreground">
+								Loading discussion…
+							</p>
+						) : comments.length > 0 ? (
 							comments.map((comment) => (
 								<div key={comment.id} className="flex gap-3">
 									<Avatar className="mt-0.5 size-7">
@@ -382,6 +357,7 @@ export function FeedbackDetail({
 						<Textarea
 							aria-label="Add an internal note"
 							value={note}
+							maxLength={5000}
 							onChange={(event) => setNote(event.target.value)}
 							disabled={!permissions.canComment}
 							placeholder="Add context, a decision, or a handoff for your team…"
@@ -392,15 +368,20 @@ export function FeedbackDetail({
 							disabled={!permissions.canComment || note.trim().length === 0}
 						>
 							<Send data-icon="inline-start" />
-							Add internal note
+							{pending ? "Saving…" : "Add internal note"}
 						</Button>
 					</div>
 				</section>
 
 				<section className="border-t pt-5">
 					<h3 className="font-heading text-sm font-semibold">Activity</h3>
+					<p className="text-xs text-muted-foreground">Latest 100 entries</p>
 					<div className="mt-3 space-y-3">
-						{activities.length > 0 ? (
+						{loading ? (
+							<p role="status" className="text-sm text-muted-foreground">
+								Loading activity…
+							</p>
+						) : activities.length > 0 ? (
 							activities.map((activity) => (
 								<div key={activity.id} className="flex gap-3 text-sm">
 									<span

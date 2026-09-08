@@ -1,6 +1,6 @@
 import { CircleAlert, ClipboardCheck, UserRoundX } from "lucide-react";
 
-import type { FeedbackItem } from "./data";
+import type { FeedbackItem } from "./model";
 
 export function FeedbackSummary({
 	items,

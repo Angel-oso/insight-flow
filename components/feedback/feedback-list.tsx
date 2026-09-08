@@ -1,10 +1,16 @@
 "use client";
 
-import { ArrowUpRight, Clock3, UserRoundX } from "lucide-react";
+import {
+	ArrowUpRight,
+	Clock3,
+	UserRoundX,
+} from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import type { Assignee, FeedbackItem } from "./data";
+import type { Assignee, FeedbackItem } from "./model";
 import { FeedbackTag } from "./feedback-meta";
+
+export const FEEDBACK_PAGE_SIZE = 4;
 
 const avatarStyles = [
 	"bg-dashboard-primary-soft text-dashboard-primary",
@@ -46,7 +52,9 @@ function FeedbackTitle({ item }: { readonly item: FeedbackItem }) {
 	return (
 		<div className="min-w-0">
 			<div className="flex items-center gap-2">
-				<p className="truncate font-medium">{item.title}</p>
+				<p className="font-medium leading-5 whitespace-normal [overflow-wrap:anywhere]">
+					{item.title}
+				</p>
 				{item.isStale ? (
 					<span className="hidden shrink-0 text-xs text-dashboard-warning-foreground sm:inline">
 						Stale
@@ -69,9 +77,9 @@ export function FeedbackList({
 	onSelect,
 }: {
 	readonly items: readonly FeedbackItem[];
-	readonly selectedId: string | null;
+	readonly selectedId: FeedbackItem["id"] | null;
 	readonly assignees: readonly Assignee[];
-	readonly onSelect: (id: string) => void;
+	readonly onSelect: (id: FeedbackItem["id"]) => void;
 }) {
 	const assigneeById = new Map<string, Assignee>(
 		assignees.map((assignee) => [assignee.id, assignee]),
@@ -91,14 +99,16 @@ export function FeedbackList({
 	return (
 		<>
 			<div className="hidden overflow-x-auto lg:block">
-				<table className="w-full min-w-[780px] text-left text-sm">
+				<table className="w-full min-w-[780px] table-fixed text-left text-sm">
 					<thead className="border-b text-xs text-muted-foreground">
 						<tr>
-							<th className="px-5 py-3 font-medium">Feedback</th>
-							<th className="px-4 py-3 font-medium">Priority</th>
-							<th className="px-4 py-3 font-medium">Status</th>
-							<th className="px-4 py-3 font-medium">Owner</th>
-							<th className="px-5 py-3 text-right font-medium">Updated</th>
+							<th className="w-[34%] px-5 py-3 font-medium">Feedback</th>
+							<th className="w-[13%] px-4 py-3 font-medium">Priority</th>
+							<th className="w-[14%] px-4 py-3 font-medium">Status</th>
+							<th className="w-[23%] px-4 py-3 font-medium">Owner</th>
+							<th className="w-[16%] px-5 py-3 text-right font-medium">
+								Updated
+							</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y">
@@ -114,7 +124,7 @@ export function FeedbackList({
 											: "transition-colors hover:bg-muted/45"
 									}
 								>
-									<td className="max-w-0 px-5 py-4">
+									<td className="w-[34%] min-w-0 px-5 py-4">
 										<button
 											type="button"
 											onClick={() => onSelect(item.id)}
