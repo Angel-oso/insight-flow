@@ -154,7 +154,7 @@ export function FeedbackDetail({
 
 	if (!item) {
 		return (
-			<aside className="flex min-h-80 flex-col items-start justify-center p-6">
+			<div className="flex min-h-80 flex-col items-start justify-center p-6">
 				<MessageSquareText className="size-5 text-dashboard-primary" />
 				<h2 className="mt-4 font-heading text-lg font-semibold">
 					Choose an item
@@ -163,7 +163,7 @@ export function FeedbackDetail({
 					Select feedback from the queue to classify it, assign an owner, and
 					add internal context.
 				</p>
-			</aside>
+			</div>
 		);
 	}
 
@@ -198,7 +198,7 @@ export function FeedbackDetail({
 	};
 
 	return (
-		<aside className="min-w-0 bg-card lg:border-l">
+		<div className="min-w-0 bg-transparent">
 			<div className="border-b p-5">
 				<div className="flex items-start justify-between gap-4">
 					<div className="min-w-0">
@@ -235,7 +235,7 @@ export function FeedbackDetail({
 					</p>
 				</section>
 
-				<section className="grid gap-4 border-y py-5 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+				<section className="grid gap-4 border-y py-5 sm:grid-cols-2">
 					<DetailField label="Category">
 						<DetailMenu<FeedbackCategory>
 							label="Category"
@@ -283,7 +283,7 @@ export function FeedbackDetail({
 					</DetailField>
 				</section>
 
-				<section className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+				<section className="grid gap-4 text-sm sm:grid-cols-2">
 					<div className="flex items-start gap-2">
 						<UserRound className="mt-0.5 size-4 text-muted-foreground" />
 						<div>
@@ -403,6 +403,6 @@ export function FeedbackDetail({
 					</div>
 				</section>
 			</div>
-		</aside>
+		</div>
 	);
 }

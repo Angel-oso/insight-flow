@@ -1,8 +1,7 @@
 "use client";
 
 import { parseAsString, useQueryState } from "nuqs";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { useEffect, useMemo, useState } from "react";
 import { hasCapability, type Role } from "@/lib/auth/permissions";
 import type { Project } from "@/lib/projects";
 import type { Assignee, FeedbackItem } from "./model";
@@ -19,22 +18,6 @@ const defaultFilters: FeedbackFiltersState = {
 	dateRange: "Any time",
 	attentionOnly: false,
 };
-
-const DETAIL_MOBILE_QUERY = "(max-width: 1023px)";
-
-function subscribeToDetailViewport(onStoreChange: () => void) {
-	const mediaQuery = window.matchMedia(DETAIL_MOBILE_QUERY);
-	mediaQuery.addEventListener("change", onStoreChange);
-	return () => mediaQuery.removeEventListener("change", onStoreChange);
-}
-
-function getDetailViewportSnapshot() {
-	return window.matchMedia(DETAIL_MOBILE_QUERY).matches;
-}
-
-function getDetailViewportServerSnapshot() {
-	return false;
-}
 
 export function FeedbackWorkspace({
 	items,
@@ -65,12 +48,6 @@ export function FeedbackWorkspace({
 	};
 	const [filters, setFilters] = useState<FeedbackFiltersState>(defaultFilters);
 	const [selectedId, setSelectedId] = useQueryState("feedback", parseAsString);
-	const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
-	const isDetailMobile = useSyncExternalStore(
-		subscribeToDetailViewport,
-		getDetailViewportSnapshot,
-		getDetailViewportServerSnapshot,
-	);
 	const visibleItems = useMemo(
 		() =>
 			items.filter((item) => {
@@ -166,6 +143,11 @@ export function FeedbackWorkspace({
 	};
 
 	const selectFeedback = (id: FeedbackItem["id"]) => {
+		if (id === selectedId) {
+			void setSelectedId(null);
+			setPageState({ page, selectedId: null });
+			return;
+		}
 		void setSelectedId(id);
 		const selectedIndex = visibleItems.findIndex((item) => item.id === id);
 		setPageState({
@@ -175,18 +157,10 @@ export function FeedbackWorkspace({
 					: Math.floor(selectedIndex / FEEDBACK_PAGE_SIZE) + 1,
 			selectedId: id,
 		});
-		if (isDetailMobile) {
-			setMobileDetailOpen(true);
-		}
 	};
 
 	const handlePageChange = (nextPage: number) => {
 		setPageState({ page: nextPage, selectedId });
-	};
-
-	const handleMobileDetailChange = (open: boolean) => {
-		setMobileDetailOpen(open);
-		if (!open) void setSelectedId(null);
 	};
 
 	return (
@@ -226,55 +200,28 @@ export function FeedbackWorkspace({
 				totalItems={visibleItems.length}
 				onPageChange={handlePageChange}
 			/>
-			<div className="grid min-w-0 lg:grid-cols-[minmax(0,1.35fr)_minmax(350px,0.65fr)]">
-				<div className="min-w-0">
-					<FeedbackList
-						items={paginatedItems}
-						selectedId={selectedItem?.id ?? null}
-						assignees={assignees}
-						onSelect={selectFeedback}
-					/>
-				</div>
-				<div className="hidden min-h-0 lg:sticky lg:top-6 lg:block lg:max-h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto">
-					<FeedbackDetail
-						key={detailItem?.id ?? "empty"}
-						item={detailItem}
-						loading={Boolean(selectedItem) && !detail}
-						pending={pending}
-						assignees={assignees}
-						comments={detail?.comments ?? []}
-						activities={detail?.activities ?? []}
-						permissions={permissions}
-						onUpdate={updateFeedback}
-						onAddComment={addComment}
-					/>
-				</div>
+			<div className="min-w-0">
+				<FeedbackList
+					items={paginatedItems}
+					selectedId={selectedItem?.id ?? null}
+					assignees={assignees}
+					onSelect={selectFeedback}
+					renderDetail={(item) => (
+						<FeedbackDetail
+							key={item.id}
+							item={detailItem ?? item}
+							loading={Boolean(selectedItem) && !detail}
+							pending={pending}
+							assignees={assignees}
+							comments={detail?.comments ?? []}
+							activities={detail?.activities ?? []}
+							permissions={permissions}
+							onUpdate={updateFeedback}
+							onAddComment={addComment}
+						/>
+					)}
+				/>
 			</div>
-			<Sheet
-				open={
-					isDetailMobile && (mobileDetailOpen || selectedId !== null)
-				}
-				onOpenChange={handleMobileDetailChange}
-			>
-				<SheetContent
-					side="right"
-					className="w-full max-w-none overflow-y-auto p-0 sm:max-w-none lg:hidden"
-				>
-					<SheetTitle className="sr-only">Feedback details</SheetTitle>
-					<FeedbackDetail
-						key={detailItem?.id ?? "empty"}
-						item={detailItem}
-						loading={Boolean(selectedItem) && !detail}
-						pending={pending}
-						assignees={assignees}
-						comments={detail?.comments ?? []}
-						activities={detail?.activities ?? []}
-						permissions={permissions}
-						onUpdate={updateFeedback}
-						onAddComment={addComment}
-					/>
-				</SheetContent>
-			</Sheet>
 			<p className="border-t px-5 py-3 text-xs text-muted-foreground">
 				Shared demo workspace · Changes are saved automatically.
 			</p>
