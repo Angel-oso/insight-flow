@@ -253,9 +253,12 @@ function Sidebar({
 
 function SidebarTrigger({
 	className,
+	label,
 	onClick,
 	...props
-}: React.ComponentProps<typeof Button>) {
+}: React.ComponentProps<typeof Button> & {
+	label?: string;
+}) {
 	const { toggleSidebar } = useSidebar();
 
 	return (
@@ -272,7 +275,12 @@ function SidebarTrigger({
 			{...props}
 		>
 			<PanelLeftIcon />
-			<span className="sr-only">Toggle Sidebar</span>
+			{label ? (
+				<span className="truncate group-data-[collapsible=icon]:hidden">
+					{label}
+				</span>
+			) : null}
+			<span className="sr-only">{label ?? "Toggle Sidebar"}</span>
 		</Button>
 	);
 }

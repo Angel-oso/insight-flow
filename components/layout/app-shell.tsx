@@ -16,8 +16,12 @@ export function AppShell({
 	return (
 		<SidebarProvider>
 			<AppSidebar project={project} />
-			<SidebarTrigger className="fixed top-2 left-4 z-20 md:left-[calc(var(--sidebar-width)+0.25rem)] md:peer-data-[state=collapsed]:left-[calc(var(--sidebar-width-icon)+0.25rem)]" />
-			<SidebarInset className="min-w-0 bg-dashboard-canvas">
+			<SidebarTrigger
+				aria-label="Open navigation menu"
+				title="Open navigation menu"
+				className="fixed top-[max(0.75rem,env(safe-area-inset-top))] left-[max(0.75rem,env(safe-area-inset-left))] z-40 size-11 rounded-xl border border-border bg-background text-foreground shadow-sm hover:bg-muted focus-visible:ring-3 md:hidden"
+			/>
+			<SidebarInset className="min-w-0 bg-dashboard-canvas pt-[max(3rem,calc(env(safe-area-inset-top)+3rem))] md:pt-0">
 				{children}
 			</SidebarInset>
 		</SidebarProvider>

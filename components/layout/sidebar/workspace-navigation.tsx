@@ -1,6 +1,6 @@
 "use client";
 
-import { Inbox, LayoutDashboard, Users } from "lucide-react";
+import { Inbox, LayoutDashboard, Settings, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -18,6 +18,7 @@ const navigation = [
 	{ label: "Overview", icon: LayoutDashboard, section: "home" },
 	{ label: "Feedback", icon: Inbox, section: "feedback" },
 	{ label: "Team", icon: Users, section: "team" },
+	{ label: "Project settings", icon: Settings, section: "settings" },
 ] as const;
 
 export function WorkspaceNavigation({
