@@ -4,6 +4,7 @@ import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useMemo, useState } from "react";
 import { hasCapability, type Role } from "@/lib/auth/permissions";
 import type { Project } from "@/lib/projects";
+import type { Taxonomies } from "@/lib/taxonomy";
 import type { Assignee, FeedbackItem } from "./model";
 import { useFeedbackDetail, useFeedbackWrites } from "./use-feedback";
 import { FeedbackDetail, type FeedbackPermissions } from "./feedback-detail";
@@ -22,6 +23,7 @@ const defaultFilters: FeedbackFiltersState = {
 export function FeedbackWorkspace({
 	items,
 	assignees,
+	taxonomies,
 	now,
 	archived,
 	project,
@@ -29,6 +31,7 @@ export function FeedbackWorkspace({
 }: {
 	readonly items: readonly FeedbackItem[];
 	readonly assignees: readonly Assignee[];
+	readonly taxonomies: Taxonomies;
 	readonly now: number;
 	readonly archived: boolean;
 	readonly project: Project;
@@ -192,6 +195,7 @@ export function FeedbackWorkspace({
 			) : null}
 			<FeedbackFilters
 				filters={filters}
+				taxonomies={taxonomies}
 				onFiltersChange={updateFilters}
 				onReset={() => updateFilters(defaultFilters)}
 				page={page}
@@ -205,6 +209,7 @@ export function FeedbackWorkspace({
 					items={paginatedItems}
 					selectedId={selectedItem?.id ?? null}
 					assignees={assignees}
+					taxonomies={taxonomies}
 					onSelect={selectFeedback}
 					renderDetail={(item) => (
 						<FeedbackDetail
@@ -216,6 +221,7 @@ export function FeedbackWorkspace({
 							comments={detail?.comments ?? []}
 							activities={detail?.activities ?? []}
 							permissions={permissions}
+							taxonomies={taxonomies}
 							onUpdate={updateFeedback}
 							onAddComment={addComment}
 						/>

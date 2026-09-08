@@ -45,6 +45,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import type { Project } from "@/lib/projects";
 import { projectPath } from "@/lib/projects";
+import { taxonomyToneBadge, useTaxonomies, type TaxonomyTone } from "@/lib/taxonomy";
 
 type ProjectStatus = "Active" | "Paused" | "Archived";
 type Priority = "Low" | "Medium" | "High" | "Critical";
@@ -127,15 +128,15 @@ function SettingToggle({
 
 function PriorityMenu({
 	priority,
+	priorities,
 	onPriorityChange,
 	disabled,
 }: {
 	readonly priority: Priority;
+	readonly priorities: readonly string[];
 	readonly onPriorityChange: (priority: Priority) => void;
 	readonly disabled?: boolean;
 }) {
-	const priorities: readonly Priority[] = ["Low", "Medium", "High", "Critical"];
-
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger
@@ -152,7 +153,7 @@ function PriorityMenu({
 					{priorities.map((candidate) => (
 						<DropdownMenuItem
 							key={candidate}
-							onClick={() => onPriorityChange(candidate)}
+							onClick={() => onPriorityChange(candidate as Priority)}
 						>
 							{candidate}
 							{candidate === priority ? (
@@ -215,6 +216,19 @@ export function ProjectSettingsWorkspace({
 	};
 
 	const canEdit = canManage && !isArchived;
+	const taxonomies = useTaxonomies();
+	// Database taxonomies once loaded; static mirror only for the first paint.
+	const priorityOptions =
+		taxonomies?.priorities.map((item) => item.label) ??
+		["Low", "Medium", "High", "Critical"];
+	const categoryOptions: readonly { label: string; tone: TaxonomyTone }[] =
+		taxonomies?.categories ?? [
+			{ label: "Bug", tone: "danger" },
+			{ label: "Feature request", tone: "primary" },
+			{ label: "Improvement", tone: "info" },
+			{ label: "Question", tone: "warning" },
+			{ label: "Other", tone: "muted" },
+		];
 	const copyInboxUrl = async () => {
 		try {
 			await navigator.clipboard.writeText(`https://${inboxUrl}`);
@@ -416,6 +430,7 @@ export function ProjectSettingsWorkspace({
 						</div>
 						<PriorityMenu
 							priority={settings.defaultPriority}
+							priorities={priorityOptions}
 							onPriorityChange={(defaultPriority) =>
 								updateSettings({ defaultPriority })
 							}
@@ -429,18 +444,12 @@ export function ProjectSettingsWorkspace({
 							comparable across projects.
 						</p>
 						<div className="mt-3 flex flex-wrap gap-2">
-							{[
-								"Bug",
-								"Feature request",
-								"Improvement",
-								"Question",
-								"Other",
-							].map((category) => (
+							{categoryOptions.map((category) => (
 								<span
-									key={category}
-									className="rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground"
+									key={category.label}
+									className={`rounded-md px-2 py-1 text-xs font-medium ${taxonomyToneBadge[category.tone]}`}
 								>
-									{category}
+									{category.label}
 								</span>
 							))}
 						</div>

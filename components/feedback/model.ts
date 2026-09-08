@@ -1,26 +1,7 @@
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 
-export const feedbackCategories = [
-	"Bug",
-	"Feature request",
-	"Improvement",
-	"Question",
-	"Other",
-] as const satisfies readonly Doc<"feedback">["category"][];
-export const feedbackPriorities = [
-	"Low",
-	"Medium",
-	"High",
-	"Critical",
-] as const satisfies readonly Doc<"feedback">["priority"][];
-export const feedbackStatuses = [
-	"New",
-	"In review",
-	"Planned",
-	"In progress",
-	"Completed",
-	"Discarded",
-] as const satisfies readonly Doc<"feedback">["status"][];
+// Display metadata (labels, ranks, tones) lives in the taxonomies table;
+// these types mirror the schema unions for compile-time safety.
 export type FeedbackCategory = Doc<"feedback">["category"];
 export type FeedbackPriority = Doc<"feedback">["priority"];
 export type FeedbackStatus = Doc<"feedback">["status"];

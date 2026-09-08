@@ -3,6 +3,7 @@
 import { ChevronDown, Clock3, UserRoundX } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import type { Taxonomies } from "@/lib/taxonomy";
 import type { Assignee, FeedbackItem } from "./model";
 import { FeedbackTag } from "./feedback-meta";
 
@@ -70,12 +71,14 @@ export function FeedbackList({
 	items,
 	selectedId,
 	assignees,
+	taxonomies,
 	onSelect,
 	renderDetail,
 }: {
 	readonly items: readonly FeedbackItem[];
 	readonly selectedId: FeedbackItem["id"] | null;
 	readonly assignees: readonly Assignee[];
+	readonly taxonomies: Taxonomies;
 	readonly onSelect: (id: FeedbackItem["id"]) => void;
 	readonly renderDetail: (item: FeedbackItem) => React.ReactNode;
 }) {
@@ -117,8 +120,8 @@ export function FeedbackList({
 									<FeedbackTitle item={item} />
 								</span>
 								<span className="flex flex-wrap items-center gap-x-3 gap-y-2 lg:ml-auto lg:shrink-0 lg:justify-end">
-									<FeedbackTag value={item.priority} kind="priority" />
-									<FeedbackTag value={item.status} kind="status" />
+									<FeedbackTag value={item.priority} kind="priority" taxonomies={taxonomies} />
+									<FeedbackTag value={item.status} kind="status" taxonomies={taxonomies} />
 									<AssigneeAvatar
 										assignee={assigneeById.get(item.assigneeId ?? "")}
 										index={index}

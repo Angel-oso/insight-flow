@@ -20,6 +20,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import type { Taxonomies } from "@/lib/taxonomy";
 import type {
 	FeedbackCategory,
 	FeedbackPriority,
@@ -86,6 +87,7 @@ export type FeedbackFiltersState = {
 
 export function FeedbackFilters({
 	filters,
+	taxonomies,
 	onFiltersChange,
 	onReset,
 	page,
@@ -95,6 +97,7 @@ export function FeedbackFilters({
 	onPageChange,
 }: {
 	readonly filters: FeedbackFiltersState;
+	readonly taxonomies: Taxonomies;
 	readonly onFiltersChange: (filters: FeedbackFiltersState) => void;
 	readonly onReset: () => void;
 	readonly page: number;
@@ -133,19 +136,17 @@ export function FeedbackFilters({
 						value={filters.status}
 						options={[
 							"All statuses",
-							"New",
-							"In review",
-							"Planned",
-							"In progress",
-							"Completed",
-							"Discarded",
+							...taxonomies.statuses.map((item) => item.value as FeedbackStatus),
 						]}
 						onValueChange={(status) => onFiltersChange({ ...filters, status })}
 					/>
 					<FilterMenu
 						label="Priority"
 						value={filters.priority}
-						options={["All priorities", "Low", "Medium", "High", "Critical"]}
+						options={[
+							"All priorities",
+							...taxonomies.priorities.map((item) => item.value as FeedbackPriority),
+						]}
 						onValueChange={(priority) =>
 							onFiltersChange({ ...filters, priority })
 						}
@@ -155,11 +156,7 @@ export function FeedbackFilters({
 						value={filters.category}
 						options={[
 							"All categories",
-							"Bug",
-							"Feature request",
-							"Improvement",
-							"Question",
-							"Other",
+							...taxonomies.categories.map((item) => item.value as FeedbackCategory),
 						]}
 						onValueChange={(category) =>
 							onFiltersChange({ ...filters, category })

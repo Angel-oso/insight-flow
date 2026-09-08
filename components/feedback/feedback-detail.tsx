@@ -29,11 +29,7 @@ import type {
 	FeedbackPriority,
 	FeedbackStatus,
 } from "./model";
-import {
-	feedbackCategories,
-	feedbackPriorities,
-	feedbackStatuses,
-} from "./model";
+import type { Taxonomies } from "@/lib/taxonomy";
 import { FeedbackTag } from "./feedback-meta";
 
 const activityStyles: Record<FeedbackActivity["tone"], string> = {
@@ -129,6 +125,7 @@ export function FeedbackDetail({
 	comments,
 	activities,
 	permissions,
+	taxonomies,
 	onUpdate,
 	onAddComment,
 	loading,
@@ -141,6 +138,7 @@ export function FeedbackDetail({
 	readonly comments: readonly FeedbackComment[];
 	readonly activities: readonly FeedbackActivity[];
 	readonly permissions: FeedbackPermissions;
+	readonly taxonomies: Taxonomies;
 	readonly onUpdate: (
 		id: FeedbackItem["id"],
 		update: Update,
@@ -170,17 +168,17 @@ export function FeedbackDetail({
 	const assignee = assignees.find(
 		(candidate) => candidate.id === item.assigneeId,
 	);
-	const categoryOptions = feedbackCategories.map((category) => ({
-		label: category,
-		value: category,
+	const categoryOptions = taxonomies.categories.map((category) => ({
+		label: category.label,
+		value: category.value as FeedbackCategory,
 	}));
-	const priorityOptions = feedbackPriorities.map((priority) => ({
-		label: priority,
-		value: priority,
+	const priorityOptions = taxonomies.priorities.map((priority) => ({
+		label: priority.label,
+		value: priority.value as FeedbackPriority,
 	}));
-	const statusOptions = feedbackStatuses.map((status) => ({
-		label: status,
-		value: status,
+	const statusOptions = taxonomies.statuses.map((status) => ({
+		label: status.label,
+		value: status.value as FeedbackStatus,
 	}));
 	const assigneeOptions = [
 		{ label: "Unassigned", value: null },
@@ -214,9 +212,9 @@ export function FeedbackDetail({
 					) : null}
 				</div>
 				<div className="mt-4 flex flex-wrap gap-2">
-					<FeedbackTag value={item.category} kind="category" />
-					<FeedbackTag value={item.priority} kind="priority" />
-					<FeedbackTag value={item.status} kind="status" />
+					<FeedbackTag value={item.category} kind="category" taxonomies={taxonomies} />
+					<FeedbackTag value={item.priority} kind="priority" taxonomies={taxonomies} />
+					<FeedbackTag value={item.status} kind="status" taxonomies={taxonomies} />
 					{item.isStale ? (
 						<span className="inline-flex h-6 items-center rounded-md bg-dashboard-warning-soft px-2 text-xs font-medium text-dashboard-warning-foreground">
 							Stale · {item.inactiveDays} days
