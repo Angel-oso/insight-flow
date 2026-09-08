@@ -45,7 +45,12 @@ function FilterMenu<T extends string>({
 		<DropdownMenu>
 			<DropdownMenuTrigger
 				render={
-					<Button variant="outline" size="sm" aria-label={`Filter by ${label}`}>
+					<Button
+						variant="outline"
+						size="sm"
+						className="max-w-full shrink-0"
+						aria-label={`Filter by ${label}`}
+					>
 						<span className="text-muted-foreground">{label}</span>
 						<span className="max-w-24 truncate">{value}</span>
 						<ChevronDown data-icon="inline-end" />
@@ -107,9 +112,9 @@ export function FeedbackFilters({
 		filters.attentionOnly;
 
 	return (
-		<div className="border-b p-5">
-			<div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-				<div className="relative w-full min-w-0 xl:max-w-sm">
+		<div className="@container border-b p-4 sm:p-5">
+			<div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-center @2xl:justify-between">
+				<div className="relative w-full min-w-0 @2xl:w-72 @2xl:shrink-0">
 					<Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
 					<Input
 						aria-label="Search feedback"
@@ -121,8 +126,8 @@ export function FeedbackFilters({
 						placeholder="Search title or sender"
 					/>
 				</div>
-				<div className="flex flex-wrap items-center gap-1.5">
-					<SlidersHorizontal className="ml-1 size-3.5 text-muted-foreground" />
+				<div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-2 @2xl:flex-1 @2xl:justify-end">
+					<SlidersHorizontal className="ml-1 size-3.5 shrink-0 text-muted-foreground" />
 					<FilterMenu
 						label="Status"
 						value={filters.status}
@@ -171,6 +176,7 @@ export function FeedbackFilters({
 					<Button
 						variant={filters.attentionOnly ? "secondary" : "ghost"}
 						size="sm"
+						className="shrink-0"
 						onClick={() =>
 							onFiltersChange({
 								...filters,
@@ -188,7 +194,7 @@ export function FeedbackFilters({
 						</Button>
 					) : null}
 					{pageCount > 1 ? (
-						<div className="flex items-center gap-1 xl:border-l xl:border-border xl:pl-2">
+						<div className="flex shrink-0 items-center gap-1 @2xl:ml-1 @2xl:border-l @2xl:border-border @2xl:pl-2">
 							<span className="mr-1 text-xs text-muted-foreground">
 								{(page - 1) * pageSize + 1}–
 								{Math.min(page * pageSize, totalItems)} of {totalItems}
