@@ -6,7 +6,7 @@ import {
 	requireFeedback,
 	requireProject,
 } from "./feedback/access";
-import { getTaxonomies, taxonomiesValidator } from "./taxonomies";
+import { getFinalStatuses, getTaxonomies, taxonomiesValidator } from "./taxonomies";
 import schema from "./schema";
 
 const updateFields = schema.tables.feedback.validator
@@ -107,6 +107,18 @@ export const update = mutation({
 			if (member.role === "member" && item.assigneeId !== member.userId)
 				throw new ConvexError("Only the assigned member can update this item.");
 		}
+		// Values are dynamic: they must exist in the taxonomies table.
+		const taxonomies = await getTaxonomies(ctx);
+		const known = {
+			category: new Set(taxonomies.categories.map((entry) => entry.value)),
+			priority: new Set(taxonomies.priorities.map((entry) => entry.value)),
+			status: new Set(taxonomies.statuses.map((entry) => entry.value)),
+		};
+		for (const field of ["category", "priority", "status"] as const) {
+			if (changes[field] !== undefined && !known[field].has(changes[field]!)) {
+				throw new ConvexError(`Unknown ${field}: ${changes[field]}.`);
+			}
+		}
 		let ownerName = "Unassigned";
 		if (changes.assigneeId) {
 			const assignee = await ctx.db
@@ -154,11 +166,12 @@ export const update = mutation({
 			});
 		}
 		if (!changed) return null;
+		const finals = await getFinalStatuses(ctx);
 		await ctx.db.patch("feedback", feedbackId, {
 			...changes,
 			updatedAt: now,
 			...(changes.status !== undefined && changes.status !== item.status
-				? { completedAt: changes.status === "Completed" ? now : undefined }
+				? { completedAt: finals.has(changes.status) ? now : undefined }
 				: {}),
 		});
 		return null;

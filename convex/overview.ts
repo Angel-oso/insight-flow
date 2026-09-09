@@ -2,7 +2,13 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { listProjectFeedback, requireProject } from "./feedback/access";
-import { getTaxonomies, taxonomiesValidator } from "./taxonomies";
+import {
+	getFinalStatuses,
+	getMaxPriorityRank,
+	getPriorityRanks,
+	getTaxonomies,
+	taxonomiesValidator,
+} from "./taxonomies";
 import schema from "./schema";
 
 const dayMs = 24 * 60 * 60 * 1000;
@@ -39,8 +45,8 @@ function initials(name: string) {
 		.join("");
 }
 
-function isOpen(item: Doc<"feedback">) {
-	return item.status !== "Completed" && item.status !== "Discarded";
+function isOpen(item: Doc<"feedback">, finals: ReadonlySet<string>) {
+	return !finals.has(item.status);
 }
 
 /** Transparent project-health rules, shared by the overview and its footer. */
@@ -122,6 +128,14 @@ export const get = query({
 		const rangeStart = now - rangeDays * dayMs;
 		const previousStart = now - 2 * rangeDays * dayMs;
 
+		// Dynamic taxonomy rules: final states close the backlog, and the
+		// highest priority rank defines the critical lane.
+		const taxonomies = await getTaxonomies(ctx);
+		const finals = await getFinalStatuses(ctx);
+		const maxRank = await getMaxPriorityRank(ctx);
+		const priorityRank = await getPriorityRanks(ctx);
+		const rankOf = (priority: string) => priorityRank.get(priority) ?? 0;
+
 		const inRange = (timestamp: number, start: number, end: number) =>
 			timestamp >= start && timestamp < end;
 
@@ -183,15 +197,11 @@ export const get = query({
 			};
 		});
 
-		// Status distribution, one bounded indexed read per lane.
-		const statusOrder = [
-			"New",
-			"In review",
-			"Planned",
-			"In progress",
-			"Completed",
-			"Discarded",
-		] as const;
+		// Status distribution in taxonomy rank order, one bounded indexed
+		// read per lane.
+		const statusOrder = [...taxonomies.statuses]
+			.sort((a, b) => a.rank - b.rank)
+			.map((entry) => entry.value);
 		const statuses = await Promise.all(
 			statusOrder.map(async (status) => {
 				const rows = await ctx.db
@@ -213,7 +223,7 @@ export const get = query({
 		type AttentionCandidate = {
 			id: Id<"feedback">;
 			title: string;
-			priority: Doc<"feedback">["priority"];
+			priority: string;
 			reason: "Unassigned" | "Stale" | "No activity";
 			updatedAt: number;
 			rank: number;
@@ -222,19 +232,18 @@ export const get = query({
 		for (const item of items) {
 			if (item.updatedAt > (lastActivityAt ?? 0)) lastActivityAt = item.updatedAt;
 			categoryCounts.set(item.category, (categoryCounts.get(item.category) ?? 0) + 1);
-			if (!isOpen(item)) {
-				if (item.status === "Completed") completed += 1;
+			if (!isOpen(item, finals)) {
+				if (finals.has(item.status)) completed += 1;
 				continue;
 			}
 			open += 1;
-			if (item.priority === "Critical") {
+			if (rankOf(item.priority) >= maxRank) {
 				critical += 1;
 				if (item.assigneeId === null) criticalUnassigned += 1;
 			}
 			const stale = now - item.updatedAt >= staleDays * dayMs;
 			const needsAttention =
-				item.priority === "Critical" ||
-				item.priority === "High" ||
+				rankOf(item.priority) >= maxRank - 1 ||
 				item.assigneeId === null ||
 				stale;
 			if (!needsAttention) continue;
@@ -249,13 +258,12 @@ export const get = query({
 							? "Stale"
 							: "No activity",
 				updatedAt: item.updatedAt,
-				rank:
-					item.priority === "Critical" ? 0 : item.priority === "High" ? 1 : 2,
+				rank: rankOf(item.priority),
 			});
 		}
 		attentionCandidates.sort(
 			(a, b) =>
-				a.rank - b.rank ||
+				b.rank - a.rank ||
 				Number(a.reason !== "Unassigned") - Number(b.reason !== "Unassigned") ||
 				a.updatedAt - b.updatedAt,
 		);
@@ -268,10 +276,7 @@ export const get = query({
 		}));
 
 		const categories = [...categoryCounts.entries()]
-			.map(([category, count]) => ({
-				category: category as Doc<"feedback">["category"],
-				count,
-			}))
+			.map(([category, count]) => ({ category, count }))
 			.sort((a, b) => b.count - a.count)
 			.slice(0, 5);
 
@@ -331,7 +336,7 @@ export const get = query({
 				status: healthStatusFor(open, critical),
 			},
 			activities,
-			taxonomies: await getTaxonomies(ctx),
+			taxonomies,
 			generatedAt: now,
 		};
 	},
