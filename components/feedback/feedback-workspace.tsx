@@ -4,7 +4,12 @@ import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useMemo, useState } from "react";
 import { hasCapability, type Role } from "@/lib/auth/permissions";
 import type { Project } from "@/lib/projects";
-import type { Taxonomies } from "@/lib/taxonomy";
+import {
+	finalStatusValues,
+	maxPriorityRank,
+	taxonomyItemFor,
+	type Taxonomies,
+} from "@/lib/taxonomy";
 import type { Assignee, FeedbackItem } from "./model";
 import { useFeedbackDetail, useFeedbackWrites } from "./use-feedback";
 import { FeedbackDetail, type FeedbackPermissions } from "./feedback-detail";
@@ -51,6 +56,8 @@ export function FeedbackWorkspace({
 	};
 	const [filters, setFilters] = useState<FeedbackFiltersState>(defaultFilters);
 	const [selectedId, setSelectedId] = useQueryState("feedback", parseAsString);
+	const finals = useMemo(() => finalStatusValues(taxonomies), [taxonomies]);
+	const maxRank = useMemo(() => maxPriorityRank(taxonomies), [taxonomies]);
 	const visibleItems = useMemo(
 		() =>
 			items.filter((item) => {
@@ -72,10 +79,9 @@ export function FeedbackWorkspace({
 					(filters.dateRange === "Past 7 days" && item.ageDays <= 7) ||
 					(filters.dateRange === "Past 30 days" && item.ageDays <= 30);
 				const needsAttention =
-					item.status !== "Completed" &&
-					item.status !== "Discarded" &&
-					(item.priority === "Critical" ||
-						item.priority === "High" ||
+					!finals.has(item.status) &&
+					(taxonomyItemFor(taxonomies.priorities, item.priority).rank >=
+						maxRank - 1 ||
 						item.assigneeId === null ||
 						item.isStale);
 
@@ -88,7 +94,7 @@ export function FeedbackWorkspace({
 					(!filters.attentionOnly || needsAttention)
 				);
 			}),
-		[filters, items],
+		[filters, items, finals, maxRank, taxonomies],
 	);
 
 	const selectedItem = items.find((item) => item.id === selectedId) ?? null;
@@ -133,6 +139,7 @@ export function FeedbackWorkspace({
 		selectedItem?.id ?? null,
 		project.name,
 		now,
+		finals,
 	);
 	const detailItem = detail?.item ?? selectedItem;
 

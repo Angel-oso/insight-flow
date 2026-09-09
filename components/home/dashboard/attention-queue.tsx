@@ -4,17 +4,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { projectPath } from "@/lib/projects";
-import { taxonomyToneBadge, type TaxonomyTone } from "@/lib/taxonomy";
+import { taxonomyColorStyle, taxonomyToneBadge } from "@/lib/taxonomy";
 import type { OverviewAttentionItem } from "./model";
-
-const toneBorders: Record<TaxonomyTone, string> = {
-	primary: "border-dashboard-primary/25",
-	info: "border-dashboard-info/25",
-	success: "border-dashboard-success/25",
-	warning: "border-dashboard-warning/30",
-	danger: "border-dashboard-danger/25",
-	muted: "border-border",
-};
 
 export function AttentionQueue({
 	items,
@@ -51,7 +42,8 @@ export function AttentionQueue({
 									<div className="min-w-0">
 										<div className="flex items-center gap-2">
 											<span
-												className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${taxonomyToneBadge[item.tone]} ${item.rank >= 2 ? toneBorders[item.tone] : "border-transparent"}`}
+												style={item.color ? taxonomyColorStyle(item.color) : undefined}
+												className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${item.color ? "" : `${taxonomyToneBadge[item.tone]} border-transparent`}`}
 											>
 												{item.priorityLabel}
 											</span>

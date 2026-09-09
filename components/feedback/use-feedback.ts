@@ -26,6 +26,7 @@ export function useFeedbackDetail(
 	feedbackId: Id<"feedback"> | null,
 	projectName: string,
 	now: number,
+	finals: ReadonlySet<string>,
 ) {
 	const data = useQuery(
 		api.feedback.detail,
@@ -33,7 +34,7 @@ export function useFeedbackDetail(
 	);
 	return data
 		? {
-				item: presentFeedback(data.item, projectName, now),
+				item: presentFeedback(data.item, projectName, now, finals),
 				...presentDiscussion(data, now),
 			}
 		: undefined;

@@ -30,6 +30,11 @@ import type {
 	FeedbackStatus,
 } from "./model";
 import type { Taxonomies } from "@/lib/taxonomy";
+import {
+	maxPriorityRank,
+	taxonomyColorStyle,
+	taxonomyItemFor,
+} from "@/lib/taxonomy";
 import { FeedbackTag } from "./feedback-meta";
 
 const activityStyles: Record<FeedbackActivity["tone"], string> = {
@@ -168,6 +173,15 @@ export function FeedbackDetail({
 	const assignee = assignees.find(
 		(candidate) => candidate.id === item.assigneeId,
 	);
+	const priorityRank = taxonomyItemFor(
+		taxonomies.priorities,
+		item.priority,
+	).rank;
+	const isSevere = priorityRank >= maxPriorityRank(taxonomies);
+	const severeColor = taxonomyItemFor(
+		taxonomies.priorities,
+		item.priority,
+	).color;
 	const categoryOptions = taxonomies.categories.map((category) => ({
 		label: category.label,
 		value: category.value as FeedbackCategory,
@@ -207,8 +221,15 @@ export function FeedbackDetail({
 							{item.title}
 						</h2>
 					</div>
-					{item.priority === "Critical" ? (
-						<CircleAlert className="mt-1 size-5 shrink-0 text-dashboard-danger" />
+					{isSevere ? (
+						<CircleAlert
+							className={`mt-1 size-5 shrink-0 ${severeColor ? "" : "text-dashboard-danger"}`}
+							style={
+								severeColor
+									? { color: taxonomyColorStyle(severeColor).color }
+									: undefined
+							}
+						/>
 					) : null}
 				</div>
 				<div className="mt-4 flex flex-wrap gap-2">

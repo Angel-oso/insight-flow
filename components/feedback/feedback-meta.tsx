@@ -1,5 +1,5 @@
 import type { Taxonomies } from "@/lib/taxonomy";
-import { taxonomyItemFor, taxonomyToneBadge } from "@/lib/taxonomy";
+import { taxonomyBadgeClass, taxonomyColorStyle, taxonomyItemFor } from "@/lib/taxonomy";
 import type {
 	FeedbackCategory,
 	FeedbackPriority,
@@ -25,7 +25,8 @@ export function FeedbackTag({
 
 	return (
 		<span
-			className={`inline-flex h-6 items-center rounded-md px-2 text-xs font-medium ${taxonomyToneBadge[item.tone]}`}
+			style={item.color ? taxonomyColorStyle(item.color) : undefined}
+			className={`inline-flex h-6 items-center rounded-md px-2 text-xs font-medium ${item.color ? "" : taxonomyBadgeClass(item)}`}
 		>
 			{item.label}
 		</span>

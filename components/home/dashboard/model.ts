@@ -40,6 +40,8 @@ export type OverviewAttentionItem = {
 	readonly priorityLabel: string;
 	readonly tone: TaxonomyTone;
 	readonly rank: number;
+	readonly color?: string;
+	readonly severe: boolean;
 	readonly reason: "Unassigned" | "Stale" | "No activity";
 	readonly age: string;
 };
@@ -112,6 +114,7 @@ export function presentOverview(
 	const categoryByValue = new Map(
 		taxonomies.categories.map((item) => [item.value, item]),
 	);
+	const maxRank = Math.max(0, ...taxonomies.priorities.map((item) => item.rank));
 
 	const receivedDelta = percentChange(metrics.received, metrics.receivedPrevious);
 	const currentRate =
@@ -190,7 +193,10 @@ export function presentOverview(
 			return {
 				label: taxonomy?.label ?? item.status,
 				value: item.count,
-				token: taxonomy?.chartToken ?? taxonomyToneChart[taxonomy?.tone ?? "muted"],
+				token:
+					taxonomy?.color ??
+					taxonomy?.chartToken ??
+					taxonomyToneChart[taxonomy?.tone ?? "muted"],
 			};
 		}),
 		categories: data.categories.map((item) => ({
@@ -199,6 +205,7 @@ export function presentOverview(
 		})),
 		attention: data.attention.map((item) => {
 			const taxonomy = priorityByValue.get(item.priority);
+			const rank = taxonomy?.rank ?? 0;
 			return {
 				id: item.id,
 				title: item.title,
@@ -206,7 +213,9 @@ export function presentOverview(
 				priority: item.priority,
 				priorityLabel: taxonomy?.label ?? item.priority,
 				tone: taxonomy?.tone ?? ("muted" as const),
-				rank: taxonomy?.rank ?? 0,
+				rank,
+				color: taxonomy?.color,
+				severe: rank >= maxRank - 1,
 				reason: item.reason,
 				age: relativeTime(item.updatedAt, now),
 			};

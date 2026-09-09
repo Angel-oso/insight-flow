@@ -1,21 +1,35 @@
 import { CircleAlert, ClipboardCheck, UserRoundX } from "lucide-react";
 
+import type { Taxonomies } from "@/lib/taxonomy";
+import {
+	finalStatusValues,
+	maxPriorityRank,
+	minStatusRank,
+	taxonomyItemFor,
+} from "@/lib/taxonomy";
 import type { FeedbackItem } from "./model";
 
 export function FeedbackSummary({
 	items,
+	taxonomies,
 }: {
 	readonly items: readonly FeedbackItem[];
+	readonly taxonomies: Taxonomies;
 }) {
-	const openItems = items.filter(
-		(item) => item.status !== "Completed" && item.status !== "Discarded",
-	);
-	const needsTriage = openItems.filter((item) => item.status === "New").length;
+	const finals = finalStatusValues(taxonomies);
+	const maxRank = maxPriorityRank(taxonomies);
+	const minRank = minStatusRank(taxonomies);
+	const openItems = items.filter((item) => !finals.has(item.status));
+	const needsTriage = openItems.filter(
+		(item) =>
+			taxonomyItemFor(taxonomies.statuses, item.status).rank === minRank,
+	).length;
 	const unassigned = openItems.filter(
 		(item) => item.assigneeId === null,
 	).length;
 	const critical = openItems.filter(
-		(item) => item.priority === "Critical",
+		(item) =>
+			taxonomyItemFor(taxonomies.priorities, item.priority).rank === maxRank,
 	).length;
 
 	return (

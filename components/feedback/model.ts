@@ -30,6 +30,7 @@ export function presentFeedback(
 	item: Doc<"feedback">,
 	project: string,
 	now: number,
+	finals: ReadonlySet<string>,
 ) {
 	const ageDays = Math.max(0, Math.floor((now - item.receivedAt) / 86400000));
 	const inactiveDays = Math.max(
@@ -43,9 +44,7 @@ export function presentFeedback(
 		ageDays,
 		inactiveDays,
 		isStale:
-			item.status !== "Completed" &&
-			item.status !== "Discarded" &&
-			inactiveDays >= 7,
+			!finals.has(item.status) && inactiveDays >= 7,
 		receivedAt: new Date(item.receivedAt).toLocaleDateString("en-US", {
 			month: "short",
 			day: "numeric",

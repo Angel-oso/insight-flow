@@ -32,7 +32,7 @@ type DateRange = "Any time" | "Past 7 days" | "Past 30 days";
 type FilterMenuProps<T extends string> = {
 	readonly label: string;
 	readonly value: T;
-	readonly options: readonly T[];
+	readonly options: readonly { readonly value: T; readonly label: string }[];
 	readonly onValueChange: (value: T) => void;
 };
 
@@ -42,6 +42,8 @@ function FilterMenu<T extends string>({
 	options,
 	onValueChange,
 }: FilterMenuProps<T>) {
+	const selectedLabel =
+		options.find((option) => option.value === value)?.label ?? value;
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger
@@ -53,7 +55,7 @@ function FilterMenu<T extends string>({
 						aria-label={`Filter by ${label}`}
 					>
 						<span className="text-muted-foreground">{label}</span>
-						<span className="max-w-24 truncate">{value}</span>
+						<span className="max-w-24 truncate">{selectedLabel}</span>
 						<ChevronDown data-icon="inline-end" />
 					</Button>
 				}
@@ -63,11 +65,11 @@ function FilterMenu<T extends string>({
 					<DropdownMenuLabel>{label}</DropdownMenuLabel>
 					{options.map((option) => (
 						<DropdownMenuItem
-							key={option}
-							onClick={() => onValueChange(option)}
+							key={option.value}
+							onClick={() => onValueChange(option.value)}
 						>
-							<span>{option}</span>
-							{option === value ? <Check className="ml-auto size-3.5" /> : null}
+							<span>{option.label}</span>
+							{option.value === value ? <Check className="ml-auto size-3.5" /> : null}
 						</DropdownMenuItem>
 					))}
 				</DropdownMenuGroup>
@@ -135,8 +137,11 @@ export function FeedbackFilters({
 						label="Status"
 						value={filters.status}
 						options={[
-							"All statuses",
-							...taxonomies.statuses.map((item) => item.value as FeedbackStatus),
+							{ value: "All statuses" as const, label: "All statuses" },
+							...taxonomies.statuses.map((item) => ({
+								value: item.value as FeedbackStatus,
+								label: item.label,
+							})),
 						]}
 						onValueChange={(status) => onFiltersChange({ ...filters, status })}
 					/>
@@ -144,8 +149,11 @@ export function FeedbackFilters({
 						label="Priority"
 						value={filters.priority}
 						options={[
-							"All priorities",
-							...taxonomies.priorities.map((item) => item.value as FeedbackPriority),
+							{ value: "All priorities" as const, label: "All priorities" },
+							...taxonomies.priorities.map((item) => ({
+								value: item.value as FeedbackPriority,
+								label: item.label,
+							})),
 						]}
 						onValueChange={(priority) =>
 							onFiltersChange({ ...filters, priority })
@@ -155,8 +163,11 @@ export function FeedbackFilters({
 						label="Category"
 						value={filters.category}
 						options={[
-							"All categories",
-							...taxonomies.categories.map((item) => item.value as FeedbackCategory),
+							{ value: "All categories" as const, label: "All categories" },
+							...taxonomies.categories.map((item) => ({
+								value: item.value as FeedbackCategory,
+								label: item.label,
+							})),
 						]}
 						onValueChange={(category) =>
 							onFiltersChange({ ...filters, category })
@@ -165,7 +176,9 @@ export function FeedbackFilters({
 					<FilterMenu
 						label="Received"
 						value={filters.dateRange}
-						options={["Any time", "Past 7 days", "Past 30 days"]}
+						options={["Any time", "Past 7 days", "Past 30 days"].map(
+							(range) => ({ value: range as DateRange, label: range }),
+						)}
 						onValueChange={(dateRange) =>
 							onFiltersChange({ ...filters, dateRange })
 						}
