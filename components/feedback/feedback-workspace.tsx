@@ -6,7 +6,6 @@ import { hasCapability, type Role } from "@/lib/auth/permissions";
 import type { Project } from "@/lib/projects";
 import {
 	finalStatusValues,
-	maxPriorityRank,
 	taxonomyItemFor,
 	type Taxonomies,
 } from "@/lib/taxonomy";
@@ -57,7 +56,16 @@ export function FeedbackWorkspace({
 	const [filters, setFilters] = useState<FeedbackFiltersState>(defaultFilters);
 	const [selectedId, setSelectedId] = useQueryState("feedback", parseAsString);
 	const finals = useMemo(() => finalStatusValues(taxonomies), [taxonomies]);
-	const maxRank = useMemo(() => maxPriorityRank(taxonomies), [taxonomies]);
+	// Severity lane = highest rank present in the open backlog.
+	const laneRank = useMemo(() => {
+		let lane = -1;
+		for (const item of items) {
+			if (finals.has(item.status)) continue;
+			const rank = taxonomyItemFor(taxonomies.priorities, item.priority).rank;
+			if (rank > lane) lane = rank;
+		}
+		return lane;
+	}, [items, finals, taxonomies]);
 	const visibleItems = useMemo(
 		() =>
 			items.filter((item) => {
@@ -81,7 +89,7 @@ export function FeedbackWorkspace({
 				const needsAttention =
 					!finals.has(item.status) &&
 					(taxonomyItemFor(taxonomies.priorities, item.priority).rank >=
-						maxRank - 1 ||
+						laneRank - 2 ||
 						item.assigneeId === null ||
 						item.isStale);
 
@@ -94,7 +102,7 @@ export function FeedbackWorkspace({
 					(!filters.attentionOnly || needsAttention)
 				);
 			}),
-		[filters, items, finals, maxRank, taxonomies],
+		[filters, items, finals, laneRank, taxonomies],
 	);
 
 	const selectedItem = items.find((item) => item.id === selectedId) ?? null;
@@ -229,6 +237,7 @@ export function FeedbackWorkspace({
 							activities={detail?.activities ?? []}
 							permissions={permissions}
 							taxonomies={taxonomies}
+							laneRank={laneRank}
 							onUpdate={updateFeedback}
 							onAddComment={addComment}
 						/>

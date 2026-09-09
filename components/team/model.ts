@@ -37,6 +37,8 @@ export type TeamSummaryData = {
 	readonly openAssigned: number;
 	readonly unassigned: number;
 	readonly critical: number;
+	readonly criticalLabel: string | null;
+	readonly criticalColor: string | null;
 };
 
 export type PresentedTeam = {

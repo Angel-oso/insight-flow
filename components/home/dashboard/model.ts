@@ -13,6 +13,7 @@ export type OverviewMetric = {
 	readonly change: string;
 	readonly context: string;
 	readonly tone: OverviewMetricTone;
+	readonly color?: string;
 };
 
 export type OverviewTrendRow = {
@@ -39,9 +40,7 @@ export type OverviewAttentionItem = {
 	readonly priority: string;
 	readonly priorityLabel: string;
 	readonly tone: TaxonomyTone;
-	readonly rank: number;
 	readonly color?: string;
-	readonly severe: boolean;
 	readonly reason: "Unassigned" | "Stale" | "No activity";
 	readonly age: string;
 };
@@ -73,6 +72,7 @@ export type PresentedOverview = {
 	readonly trendRows: readonly OverviewTrendRow[];
 	readonly trendTicks: readonly string[];
 	readonly pace: string | null;
+	readonly criticalLabel: string;
 	readonly statuses: readonly OverviewStatusItem[];
 	readonly categories: readonly OverviewCategoryItem[];
 	readonly attention: readonly OverviewAttentionItem[];
@@ -114,7 +114,7 @@ export function presentOverview(
 	const categoryByValue = new Map(
 		taxonomies.categories.map((item) => [item.value, item]),
 	);
-	const maxRank = Math.max(0, ...taxonomies.priorities.map((item) => item.rank));
+	const criticalLabel = metrics.criticalLabel ?? "Critical";
 
 	const receivedDelta = percentChange(metrics.received, metrics.receivedPrevious);
 	const currentRate =
@@ -147,11 +147,12 @@ export function presentOverview(
 			tone: "info",
 		},
 		{
-			label: "Critical items",
+			label: `${criticalLabel} items`,
 			value: String(metrics.critical),
 			change: `${metrics.criticalUnassigned} unassigned`,
 			context: "requires intervention",
 			tone: "danger",
+			...(metrics.criticalColor ? { color: metrics.criticalColor } : {}),
 		},
 		{
 			label: "Resolution rate",
@@ -188,6 +189,7 @@ export function presentOverview(
 		trendRows,
 		trendTicks,
 		pace,
+		criticalLabel,
 		statuses: data.statuses.map((item) => {
 			const taxonomy = statusByValue.get(item.status);
 			return {
@@ -205,7 +207,6 @@ export function presentOverview(
 		})),
 		attention: data.attention.map((item) => {
 			const taxonomy = priorityByValue.get(item.priority);
-			const rank = taxonomy?.rank ?? 0;
 			return {
 				id: item.id,
 				title: item.title,
@@ -213,9 +214,7 @@ export function presentOverview(
 				priority: item.priority,
 				priorityLabel: taxonomy?.label ?? item.priority,
 				tone: taxonomy?.tone ?? ("muted" as const),
-				rank,
 				color: taxonomy?.color,
-				severe: rank >= maxRank - 1,
 				reason: item.reason,
 				age: relativeTime(item.updatedAt, now),
 			};

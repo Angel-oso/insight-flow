@@ -3,8 +3,8 @@ import { CircleAlert, ClipboardCheck, UserRoundX } from "lucide-react";
 import type { Taxonomies } from "@/lib/taxonomy";
 import {
 	finalStatusValues,
-	maxPriorityRank,
 	minStatusRank,
+	taxonomyColorStyle,
 	taxonomyItemFor,
 } from "@/lib/taxonomy";
 import type { FeedbackItem } from "./model";
@@ -17,9 +17,17 @@ export function FeedbackSummary({
 	readonly taxonomies: Taxonomies;
 }) {
 	const finals = finalStatusValues(taxonomies);
-	const maxRank = maxPriorityRank(taxonomies);
 	const minRank = minStatusRank(taxonomies);
 	const openItems = items.filter((item) => !finals.has(item.status));
+	const rankOf = (priority: string) =>
+		taxonomyItemFor(taxonomies.priorities, priority).rank;
+	// Critical lane = highest rank present in the open backlog.
+	const laneRank = Math.max(-1, ...openItems.map((item) => rankOf(item.priority)));
+	const laneLabel =
+		taxonomies.priorities.find((entry) => entry.rank === laneRank)?.label ??
+		"Critical";
+	const laneColor =
+		taxonomies.priorities.find((entry) => entry.rank === laneRank)?.color;
 	const needsTriage = openItems.filter(
 		(item) =>
 			taxonomyItemFor(taxonomies.statuses, item.status).rank === minRank,
@@ -28,8 +36,7 @@ export function FeedbackSummary({
 		(item) => item.assigneeId === null,
 	).length;
 	const critical = openItems.filter(
-		(item) =>
-			taxonomyItemFor(taxonomies.priorities, item.priority).rank === maxRank,
+		(item) => rankOf(item.priority) === laneRank,
 	).length;
 
 	return (
@@ -77,10 +84,15 @@ export function FeedbackSummary({
 				</p>
 			</div>
 			<div className="p-5">
-				<div className="flex items-center gap-2 text-dashboard-danger">
+				<div
+					style={
+						laneColor ? { color: taxonomyColorStyle(laneColor).color } : undefined
+					}
+					className={`flex items-center gap-2 ${laneColor ? "" : "text-dashboard-danger"}`}
+				>
 					<CircleAlert className="size-4" />
 					<p className="text-xs font-semibold tracking-[0.08em] uppercase">
-						Critical
+						{laneLabel}
 					</p>
 				</div>
 				<p className="mt-2 font-heading text-2xl font-semibold tabular-nums">

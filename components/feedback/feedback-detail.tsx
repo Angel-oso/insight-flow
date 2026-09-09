@@ -30,11 +30,7 @@ import type {
 	FeedbackStatus,
 } from "./model";
 import type { Taxonomies } from "@/lib/taxonomy";
-import {
-	maxPriorityRank,
-	taxonomyColorStyle,
-	taxonomyItemFor,
-} from "@/lib/taxonomy";
+import { taxonomyColorStyle, taxonomyItemFor } from "@/lib/taxonomy";
 import { FeedbackTag } from "./feedback-meta";
 
 const activityStyles: Record<FeedbackActivity["tone"], string> = {
@@ -131,6 +127,7 @@ export function FeedbackDetail({
 	activities,
 	permissions,
 	taxonomies,
+	laneRank,
 	onUpdate,
 	onAddComment,
 	loading,
@@ -144,6 +141,7 @@ export function FeedbackDetail({
 	readonly activities: readonly FeedbackActivity[];
 	readonly permissions: FeedbackPermissions;
 	readonly taxonomies: Taxonomies;
+	readonly laneRank: number;
 	readonly onUpdate: (
 		id: FeedbackItem["id"],
 		update: Update,
@@ -177,7 +175,7 @@ export function FeedbackDetail({
 		taxonomies.priorities,
 		item.priority,
 	).rank;
-	const isSevere = priorityRank >= maxPriorityRank(taxonomies);
+	const isSevere = priorityRank >= 0 && priorityRank === laneRank;
 	const severeColor = taxonomyItemFor(
 		taxonomies.priorities,
 		item.priority,

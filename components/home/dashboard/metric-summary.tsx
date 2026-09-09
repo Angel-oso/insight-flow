@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { taxonomyColorStyle } from "@/lib/taxonomy";
 import type { OverviewHealth, OverviewMetric } from "./model";
 
 const toneStyles = {
@@ -70,6 +71,9 @@ export function MetricSummary({
 				<CardContent className="grid p-0 sm:grid-cols-2 xl:grid-cols-4">
 					{metrics.map((metric, index) => {
 						const MetricIcon = toneIcons[metric.tone];
+						const colorStyle = metric.color
+							? taxonomyColorStyle(metric.color)
+							: undefined;
 
 						return (
 							<div
@@ -81,7 +85,8 @@ export function MetricSummary({
 										{metric.label}
 									</p>
 									<span
-										className={`grid size-8 place-items-center rounded-lg ${toneBackgrounds[metric.tone]} ${toneStyles[metric.tone]}`}
+										style={colorStyle}
+										className={`grid size-8 place-items-center rounded-lg ${metric.color ? "" : `${toneBackgrounds[metric.tone]} ${toneStyles[metric.tone]}`}`}
 									>
 										<MetricIcon className="size-4" aria-hidden="true" />
 									</span>
@@ -90,7 +95,10 @@ export function MetricSummary({
 									{metric.value}
 								</p>
 								<p className="mt-2 text-xs text-muted-foreground">
-									<span className={`font-semibold ${toneStyles[metric.tone]}`}>
+									<span
+										style={colorStyle ? { color: colorStyle.color } : undefined}
+										className={`font-semibold ${metric.color ? "" : toneStyles[metric.tone]}`}
+									>
 										{metric.change}
 									</span>{" "}
 									{metric.context}

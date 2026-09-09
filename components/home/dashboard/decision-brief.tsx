@@ -7,9 +7,11 @@ import { type Project, projectPath } from "@/lib/projects";
 export function DecisionBrief({
 	project,
 	criticalItems,
+	laneLabel,
 }: {
 	readonly project: Project;
 	readonly criticalItems: number;
+	readonly laneLabel: string;
 }) {
 	return (
 		<section className="grid overflow-hidden rounded-xl bg-foreground text-background lg:grid-cols-[1fr_auto]">
@@ -22,8 +24,10 @@ export function DecisionBrief({
 						{project.name} needs an ownership review.
 					</h2>
 					<p className="mt-1 max-w-3xl text-sm leading-6 text-background/70">
-						{criticalItems} critical items remain open in this project. Use the
-						queue to assign accountable owners before the backlog grows.
+						{criticalItems} {laneLabel.toLowerCase()}{" "}
+						{criticalItems === 1 ? "item remains" : "items remain"} open in
+						this project. Use the queue to assign accountable owners before
+						the backlog grows.
 					</p>
 				</div>
 			</div>

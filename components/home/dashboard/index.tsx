@@ -28,7 +28,7 @@ export function Dashboard({ project }: { readonly project: Project }) {
 		<div className="mx-auto w-full max-w-[1520px] px-4 py-7 sm:px-6 sm:py-9 lg:px-8 xl:px-10 xl:py-10">
 			<DashboardHeader project={project} />
 			<div className="mt-7 space-y-6">
-				<DecisionBrief project={project} criticalItems={overview.health.critical} />
+				<DecisionBrief project={project} criticalItems={overview.health.critical} laneLabel={overview.criticalLabel} />
 				<MetricSummary metrics={overview.metrics} health={overview.health} />
 				<section className="grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.75fr)]">
 					<TrendPanel
