@@ -170,6 +170,7 @@ export const run = internalMutation({
 				defaultPriority: "Medium",
 				criticalAlerts: true,
 				weeklyDigest: true,
+				updatedAt: now,
 			});
 			for (const memberIndex of project.memberIndexes) {
 				await ctx.db.insert("projectMembers", {

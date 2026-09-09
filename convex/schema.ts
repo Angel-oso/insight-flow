@@ -6,12 +6,9 @@ const role = v.union(
 	v.literal("manager"),
 	v.literal("member"),
 );
-const priority = v.union(
-	v.literal("Low"),
-	v.literal("Medium"),
-	v.literal("High"),
-	v.literal("Critical"),
-);
+// Feedback category/priority/status are free strings validated against the
+// taxonomies table at write time, so workspaces can define their own values.
+// The unions below document the seeded defaults only.
 
 export default defineSchema({
 	users: defineTable({
@@ -41,9 +38,10 @@ export default defineSchema({
 		),
 		// One public inbox per project; its path uses the project's slug.
 		inboxEnabled: v.boolean(),
-		defaultPriority: priority,
+		defaultPriority: v.string(),
 		criticalAlerts: v.boolean(),
 		weeklyDigest: v.boolean(),
+		updatedAt: v.optional(v.number()),
 	})
 		.index("by_slug", ["slug"])
 		.index("by_organizationId", ["organizationId"]),
@@ -57,22 +55,9 @@ export default defineSchema({
 		projectId: v.id("projects"),
 		title: v.string(),
 		description: v.string(),
-		category: v.union(
-			v.literal("Bug"),
-			v.literal("Feature request"),
-			v.literal("Improvement"),
-			v.literal("Question"),
-			v.literal("Other"),
-		),
-		priority,
-		status: v.union(
-			v.literal("New"),
-			v.literal("In review"),
-			v.literal("Planned"),
-			v.literal("In progress"),
-			v.literal("Completed"),
-			v.literal("Discarded"),
-		),
+		category: v.string(),
+		priority: v.string(),
+		status: v.string(),
 		assigneeId: v.union(v.id("users"), v.null()),
 		sender: v.union(
 			v.object({ name: v.string(), email: v.string() }),
@@ -85,7 +70,11 @@ export default defineSchema({
 		.index("by_projectId_receivedAt", ["projectId", "receivedAt"])
 		.index("by_projectId_completedAt", ["projectId", "completedAt"])
 		.index("by_projectId_status", ["projectId", "status"])
-		.index("by_projectId_assigneeId", ["projectId", "assigneeId"]),
+		.index("by_projectId_assigneeId", ["projectId", "assigneeId"])
+		// Global value lookups for taxonomy management (usage checks).
+		.index("by_status", ["status"])
+		.index("by_category", ["category"])
+		.index("by_priority", ["priority"]),
 	comments: defineTable({
 		feedbackId: v.id("feedback"),
 		authorId: v.id("users"),
@@ -130,6 +119,11 @@ export default defineSchema({
 					v.literal("danger"),
 					v.literal("muted"),
 				),
+				// Hex color picked in settings (#rrggbb). Badges and charts
+				// derive from it; tone stays as fallback for older docs.
+				color: v.optional(v.string()),
+				// Statuses only: final states don't count as open backlog.
+				isFinal: v.optional(v.boolean()),
 				chartToken: v.optional(v.string()),
 				description: v.optional(v.string()),
 			}),
