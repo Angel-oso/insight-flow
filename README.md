@@ -56,11 +56,20 @@ and comments, each producing its activity entry.
 ### Database-driven taxonomies
 
 Statuses, categories, and priorities are not hardcoded: they live in the
-`taxonomies` table as JSON docs (`value`, `label`, `rank`, `tone`,
-`chartToken`, `description`). Every surface (filters, badges, donut, settings)
-reads text, level, and color from the database. Editing a label or tone in the
-table reflects across the whole app with no deploy. Hard validation stays on
-the schema unions; `value` is the stable key and must not be edited.
+`taxonomies` table as JSON docs (`value`, `label`, `rank`, `color`, `isFinal`,
+`tone`, `description`). Every surface (filters, badges, donut, settings)
+reads text, level, and color from the database. The project settings page lets
+admins rename options, pick colors with the native color input, set ranks, mark
+final states, and create or remove options (removal is blocked while feedback
+still uses a value). Changes apply everywhere instantly with no deploy.
+
+Two architectural rules keep dynamic values safe:
+
+- The schema stores plain strings; every write validates values against the
+  taxonomy docs, and `value` slugs never change once created.
+- Business rules derive from data, not literals: final statuses close the
+  backlog, the top priority rank defines the critical lane, and the lowest
+  status rank is the triage lane.
 
 ---
 
