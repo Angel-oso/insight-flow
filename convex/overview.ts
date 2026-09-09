@@ -4,7 +4,6 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { listProjectFeedback, requireProject } from "./feedback/access";
 import {
 	getFinalStatuses,
-	getMaxPriorityRank,
 	getPriorityRanks,
 	getTaxonomies,
 	taxonomiesValidator,
@@ -74,6 +73,8 @@ export const get = query({
 			open: v.number(),
 			critical: v.number(),
 			criticalUnassigned: v.number(),
+			criticalLabel: v.union(v.string(), v.null()),
+			criticalColor: v.union(v.string(), v.null()),
 			completedInRange: v.number(),
 			completedPrevious: v.number(),
 			total: v.number(),
@@ -132,7 +133,6 @@ export const get = query({
 		// highest priority rank defines the critical lane.
 		const taxonomies = await getTaxonomies(ctx);
 		const finals = await getFinalStatuses(ctx);
-		const maxRank = await getMaxPriorityRank(ctx);
 		const priorityRank = await getPriorityRanks(ctx);
 		const rankOf = (priority: string) => priorityRank.get(priority) ?? 0;
 
@@ -219,6 +219,20 @@ export const get = query({
 		let criticalUnassigned = 0;
 		let completed = 0;
 		let lastActivityAt: number | null = null;
+		// Critical lane = highest rank present in the open backlog, so an
+		// unused higher rank never zeroes the counters. Attention covers the
+		// top three present lanes.
+		let laneRank = -1;
+		for (const item of items) {
+			if (finals.has(item.status)) continue;
+			laneRank = Math.max(laneRank, rankOf(item.priority));
+		}
+		const laneLabel =
+			taxonomies.priorities.find((entry) => entry.rank === laneRank)?.label ??
+			null;
+		const laneColor =
+			taxonomies.priorities.find((entry) => entry.rank === laneRank)?.color ??
+			null;
 		const categoryCounts = new Map<string, number>();
 		type AttentionCandidate = {
 			id: Id<"feedback">;
@@ -237,13 +251,13 @@ export const get = query({
 				continue;
 			}
 			open += 1;
-			if (rankOf(item.priority) >= maxRank) {
+			if (rankOf(item.priority) === laneRank) {
 				critical += 1;
 				if (item.assigneeId === null) criticalUnassigned += 1;
 			}
 			const stale = now - item.updatedAt >= staleDays * dayMs;
 			const needsAttention =
-				rankOf(item.priority) >= maxRank - 1 ||
+				rankOf(item.priority) >= laneRank - 2 ||
 				item.assigneeId === null ||
 				stale;
 			if (!needsAttention) continue;
@@ -314,6 +328,8 @@ export const get = query({
 				open,
 				critical,
 				criticalUnassigned,
+				criticalLabel: laneLabel,
+				criticalColor: laneColor,
 				completedInRange: resolvedInRange.filter(
 					(item) =>
 						item.completedAt !== undefined &&

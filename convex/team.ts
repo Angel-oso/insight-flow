@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { listProjectFeedback, requireProject } from "./feedback/access";
-import { getFinalStatuses, getMaxPriorityRank, getPriorityRanks } from "./taxonomies";
+import { getFinalStatuses, getPriorityRanks, getTaxonomies } from "./taxonomies";
 import schema from "./schema";
 
 function isOpen(item: Doc<"feedback">, finals: ReadonlySet<string>) {
@@ -22,6 +22,8 @@ export const get = query({
 			openAssigned: v.number(),
 			unassigned: v.number(),
 			critical: v.number(),
+			criticalLabel: v.union(v.string(), v.null()),
+			criticalColor: v.union(v.string(), v.null()),
 		}),
 		members: v.array(
 			v.object({
@@ -51,15 +53,20 @@ export const get = query({
 		// Project-level backlog for the unassigned count (bounded, shared cap).
 		const items = await listProjectFeedback(ctx, projectId);
 		const finals = await getFinalStatuses(ctx);
-		const maxRank = await getMaxPriorityRank(ctx);
 		const priorityRank = await getPriorityRanks(ctx);
 		const rankOf = (priority: string) => priorityRank.get(priority) ?? 0;
 		let unassigned = 0;
 		let critical = 0;
+		// Critical lane = highest rank present in the open backlog.
+		let laneRank = -1;
+		for (const item of items) {
+			if (!isOpen(item, finals)) continue;
+			laneRank = Math.max(laneRank, rankOf(item.priority));
+		}
 		for (const item of items) {
 			if (!isOpen(item, finals)) continue;
 			if (item.assigneeId === null) unassigned += 1;
-			if (rankOf(item.priority) >= maxRank) critical += 1;
+			if (rankOf(item.priority) === laneRank) critical += 1;
 		}
 
 		const members = [];
@@ -82,7 +89,7 @@ export const get = query({
 				if (item.updatedAt > (lastActivityAt ?? 0)) lastActivityAt = item.updatedAt;
 				if (!isOpen(item, finals)) continue;
 				openAssigned += 1;
-				if (rankOf(item.priority) >= maxRank) criticalAssigned += 1;
+				if (rankOf(item.priority) === laneRank) criticalAssigned += 1;
 			}
 			const scope = await ctx.db
 				.query("projectMembers")
@@ -110,6 +117,10 @@ export const get = query({
 
 		const coordinatorCount = members.filter((member) => member.role !== "member").length;
 		const openAssigned = members.reduce((total, member) => total + member.openAssigned, 0);
+		const { priorities } = await getTaxonomies(ctx);
+		const lanePriority = priorities.find((entry) => entry.rank === laneRank);
+		const criticalLabel = lanePriority?.label ?? null;
+		const criticalColor = lanePriority?.color ?? null;
 
 		return {
 			project: { name: project.name, slug: project.slug },
@@ -119,6 +130,8 @@ export const get = query({
 				openAssigned,
 				unassigned,
 				critical,
+				criticalLabel,
+				criticalColor,
 			},
 			members,
 		};
