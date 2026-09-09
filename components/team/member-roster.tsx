@@ -6,8 +6,7 @@ import { useMemo, useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { MemberRole, TeamMember } from "./data";
-import { roles } from "./data";
+import { memberRoles, type MemberRole, type TeamMember } from "./model";
 
 type RoleFilter = "All" | MemberRole;
 
@@ -113,7 +112,7 @@ export function MemberRoster({
 					</div>
 					<fieldset className="flex flex-wrap items-center gap-1.5">
 						<legend className="sr-only">Filter by role</legend>
-						{(["All", ...roles] as const).map((option) => (
+						{(["All", ...memberRoles] as const).map((option) => (
 							<Button
 								key={option}
 								size="sm"
@@ -136,7 +135,7 @@ export function MemberRoster({
 								<tr>
 									<th className="px-5 py-3 font-medium">Member</th>
 									<th className="px-5 py-3 font-medium">Access</th>
-									<th className="px-5 py-3 font-medium">Projects</th>
+									<th className="px-5 py-3 font-medium">Scope</th>
 									<th className="px-5 py-3 text-right font-medium">Open</th>
 									<th className="px-5 py-3 font-medium">Last activity</th>
 								</tr>
@@ -154,13 +153,14 @@ export function MemberRoster({
 											<RoleBadge role={member.role} />
 										</td>
 										<td className="px-5 py-4 text-muted-foreground">
-											{member.projects.join(" · ")}
+											{member.projectCount}{" "}
+											{member.projectCount === 1 ? "project" : "projects"}
 										</td>
 										<td className="px-5 py-4 text-right tabular-nums">
-											<p className="font-medium">{member.openFeedback}</p>
+											<p className="font-medium">{member.openAssigned}</p>
 											<p className="mt-0.5 text-xs text-muted-foreground">
-												{member.criticalFeedback > 0
-													? `${member.criticalFeedback} critical`
+												{member.criticalAssigned > 0
+													? `${member.criticalAssigned} critical`
 													: "No critical items"}
 											</p>
 										</td>
@@ -185,9 +185,10 @@ export function MemberRoster({
 								</div>
 								<div className="grid grid-cols-2 gap-4 border-t pt-4 text-sm">
 									<div>
-										<p className="text-xs text-muted-foreground">Projects</p>
+										<p className="text-xs text-muted-foreground">Scope</p>
 										<p className="mt-1 leading-5">
-											{member.projects.join(" · ")}
+											{member.projectCount}{" "}
+											{member.projectCount === 1 ? "project" : "projects"}
 										</p>
 									</div>
 									<div>
@@ -195,9 +196,9 @@ export function MemberRoster({
 											Open feedback
 										</p>
 										<p className="mt-1 font-medium tabular-nums">
-											{member.openFeedback}
-											{member.criticalFeedback > 0
-												? ` · ${member.criticalFeedback} critical`
+											{member.openAssigned}
+											{member.criticalAssigned > 0
+												? ` · ${member.criticalAssigned} critical`
 												: " · no critical"}
 										</p>
 									</div>
