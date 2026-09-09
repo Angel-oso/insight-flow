@@ -1,4 +1,5 @@
 import { useQuery } from "convex/react";
+import type { CSSProperties } from "react";
 import { api } from "@/convex/_generated/api";
 
 export type TaxonomyTone =
@@ -14,6 +15,8 @@ export type TaxonomyItem = {
 	readonly label: string;
 	readonly rank: number;
 	readonly tone: TaxonomyTone;
+	readonly color?: string;
+	readonly isFinal?: boolean;
 	readonly chartToken?: string;
 	readonly description?: string;
 };
@@ -56,6 +59,49 @@ export function taxonomyItemFor(
 	value: string,
 ): TaxonomyItem {
 	return items.find((item) => item.value === value) ?? { ...mutedFallback, value, label: value };
+}
+
+/**
+ * Badge look derived from the stored hex color. Works on light and dark
+ * surfaces because every layer mixes toward theme tokens.
+ */
+export function taxonomyColorStyle(color: string): CSSProperties {
+	return {
+		backgroundColor: `color-mix(in oklch, ${color} 13%, transparent)`,
+		color: `color-mix(in oklch, ${color} 72%, var(--foreground))`,
+		borderColor: `color-mix(in oklch, ${color} 38%, transparent)`,
+	};
+}
+
+/** Badge classes when the item has no custom color yet. */
+export function taxonomyBadgeClass(item: TaxonomyItem): string {
+	return taxonomyToneBadge[item.tone];
+}
+
+/** Chart color: custom color first, then the stored token, then the tone. */
+export function taxonomyChartColor(item: TaxonomyItem): string {
+	return item.color ?? item.chartToken ?? taxonomyToneChart[item.tone];
+}
+
+/** Statuses closing the backlog (frontend mirror of the backend rule). */
+export function finalStatusValues(taxonomies: Taxonomies): ReadonlySet<string> {
+	return new Set(
+		taxonomies.statuses
+			.filter(
+				(item) =>
+					item.isFinal ??
+					(item.value === "Completed" || item.value === "Discarded"),
+			)
+			.map((item) => item.value),
+	);
+}
+
+export function maxPriorityRank(taxonomies: Taxonomies): number {
+	return Math.max(0, ...taxonomies.priorities.map((item) => item.rank));
+}
+
+export function minStatusRank(taxonomies: Taxonomies): number {
+	return Math.min(...taxonomies.statuses.map((item) => item.rank));
 }
 
 /** Display taxonomies straight from the database; undefined while loading. */

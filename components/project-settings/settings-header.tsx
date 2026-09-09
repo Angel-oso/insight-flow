@@ -14,8 +14,8 @@ export function SettingsHeader({ project }: { readonly project: Project }) {
 						Project settings
 					</h1>
 					<p className="mt-2 max-w-[65ch] text-sm leading-6 text-muted-foreground sm:text-base">
-						Control how {project.name} receives feedback, alerts its owners, and
-						stays available to the team.
+						Control how {project.name} receives feedback and stays available
+						to the team.
 					</p>
 				</div>
 			</div>
