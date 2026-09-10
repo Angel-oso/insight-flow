@@ -8,13 +8,21 @@
  * @module
  */
 
-import type * as feedback from "../feedback.js";
+import type * as auth from "../auth.js";
+import type * as dashboard_overview from "../dashboard/overview.js";
 import type * as feedback_access from "../feedback/access.js";
-import type * as overview from "../overview.js";
-import type * as projectSettings from "../projectSettings.js";
-import type * as seed from "../seed.js";
-import type * as taxonomies from "../taxonomies.js";
-import type * as team from "../team.js";
+import type * as feedback_mutations from "../feedback/mutations.js";
+import type * as feedback_queries from "../feedback/queries.js";
+import type * as http from "../http.js";
+import type * as projects_settings from "../projects/settings.js";
+import type * as setup_mutations from "../setup/mutations.js";
+import type * as setup_queries from "../setup/queries.js";
+import type * as setup_seed from "../setup/seed.js";
+import type * as taxonomies_lib from "../taxonomies/lib.js";
+import type * as taxonomies_mutations from "../taxonomies/mutations.js";
+import type * as taxonomies_queries from "../taxonomies/queries.js";
+import type * as team_queries from "../team/queries.js";
+import type * as users_queries from "../users/queries.js";
 
 import type {
   ApiFromModules,
@@ -23,13 +31,21 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  feedback: typeof feedback;
+  auth: typeof auth;
+  "dashboard/overview": typeof dashboard_overview;
   "feedback/access": typeof feedback_access;
-  overview: typeof overview;
-  projectSettings: typeof projectSettings;
-  seed: typeof seed;
-  taxonomies: typeof taxonomies;
-  team: typeof team;
+  "feedback/mutations": typeof feedback_mutations;
+  "feedback/queries": typeof feedback_queries;
+  http: typeof http;
+  "projects/settings": typeof projects_settings;
+  "setup/mutations": typeof setup_mutations;
+  "setup/queries": typeof setup_queries;
+  "setup/seed": typeof setup_seed;
+  "taxonomies/lib": typeof taxonomies_lib;
+  "taxonomies/mutations": typeof taxonomies_mutations;
+  "taxonomies/queries": typeof taxonomies_queries;
+  "team/queries": typeof team_queries;
+  "users/queries": typeof users_queries;
 }>;
 
 /**
