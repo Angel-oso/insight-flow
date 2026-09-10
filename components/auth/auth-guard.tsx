@@ -3,15 +3,14 @@
 import { useConvexAuth } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 
 /**
  * Gate for the authenticated app: anonymous visitors go to /login, and
  * signed-in accounts without any membership land on a server-decided
- * access screen (demo claim in dev, notice otherwise).
+ * no-workspace screen.
  */
 export function RequireAuth({ children }: { readonly children: ReactNode }) {
 	const { isLoading, isAuthenticated } = useConvexAuth();
@@ -37,24 +36,12 @@ export function RequireAuth({ children }: { readonly children: ReactNode }) {
 		);
 	}
 	if (!status.hasMembership) {
-		return <NoWorkspaceAccess demoAvailable={status.demoAvailable} />;
+		return <NoWorkspaceAccess />;
 	}
 	return <>{children}</>;
 }
 
-function NoWorkspaceAccess({
-	demoAvailable,
-}: {
-	readonly demoAvailable: boolean;
-}) {
-	const claim = useMutation(api.setup.mutations.claimDemoAccess);
-	const router = useRouter();
-
-	async function handleClaim() {
-		await claim({});
-		router.refresh();
-	}
-
+function NoWorkspaceAccess() {
 	return (
 		<div className="mx-auto flex min-h-dvh w-full max-w-md items-center px-4 py-10">
 			<Card className="w-full">
@@ -63,18 +50,9 @@ function NoWorkspaceAccess({
 						No workspace yet
 					</h1>
 					<p className="text-sm leading-6 text-muted-foreground">
-						{demoAvailable
-							? "Your account is signed in, but it does not belong to a workspace. Claim the demo workspace to explore."
-							: "Your account is signed in, but it does not belong to a workspace yet. Ask a workspace administrator to invite you."}
+						Your account is signed in, but it does not belong to a workspace yet. Ask a workspace administrator to invite you.
 					</p>
 				</CardHeader>
-				{demoAvailable ? (
-					<CardContent>
-						<Button size="lg" className="w-full" onClick={handleClaim}>
-							Claim the demo workspace
-						</Button>
-					</CardContent>
-				) : null}
 			</Card>
 		</div>
 	);

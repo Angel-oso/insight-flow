@@ -245,7 +245,7 @@ export function FeedbackWorkspace({
 				/>
 			</div>
 			<p className="border-t px-5 py-3 text-xs text-muted-foreground">
-				Shared demo workspace · Changes are saved automatically.
+				Team workspace · Changes are saved automatically.
 			</p>
 		</section>
 	);

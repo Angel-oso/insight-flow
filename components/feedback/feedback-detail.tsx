@@ -335,7 +335,7 @@ export function FeedbackDetail({
 							Internal discussion
 						</h3>
 						<span className="text-xs text-muted-foreground">
-							Shared demo discussion
+							Visible to your project team
 						</span>
 					</div>
 					<div className="mt-3 space-y-3">

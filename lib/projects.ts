@@ -36,7 +36,7 @@ export function getProjectBySlug(slug: string): Project {
 			.filter(Boolean)
 			.map((word) => `${word[0]?.toUpperCase()}${word.slice(1)}`)
 			.join(" "),
-		description: "Project workspace created for this demo.",
+		description: "Project workspace.",
 	};
 }
 
