@@ -10,7 +10,7 @@ import { initials, presentFeedback } from "./model";
 import { useFeedbackClock } from "./use-feedback";
 
 function FeedbackContent({ projectSlug }: { readonly projectSlug: string }) {
-	const data = useQuery(api.feedback.workspace, { projectSlug });
+	const data = useQuery(api.feedback.queries.workspace, { projectSlug });
 	const now = useFeedbackClock();
 	if (!data)
 		return (
@@ -22,11 +22,10 @@ function FeedbackContent({ projectSlug }: { readonly projectSlug: string }) {
 	const items = data.items.map((item) =>
 		presentFeedback(item, data.project.name, now, finals),
 	);
-	const assignees = data.assignees.map((user) => ({
-		id: user._id,
-		name: user.name,
-		initials: initials(user.name),
-	}));
+	const assignees = data.assignees.map((user) => {
+		const name = user.name ?? "Former member";
+		return { id: user._id, name, initials: initials(name) };
+	});
 	return (
 		<div className="mx-auto w-full max-w-[1520px] px-4 py-7 sm:px-6 sm:py-9 lg:px-8 xl:px-10 xl:py-10">
 			<FeedbackHeader project={data.project} />

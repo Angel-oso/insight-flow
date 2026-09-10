@@ -79,9 +79,9 @@ function toDrafts(taxonomies: Taxonomies): Drafts {
 }
 
 function useTaxonomyWrites() {
-	const createOption = useMutation(api.taxonomies.createOption);
-	const updateOption = useMutation(api.taxonomies.updateOption);
-	const removeOption = useMutation(api.taxonomies.removeOption);
+	const createOption = useMutation(api.taxonomies.mutations.createOption);
+	const updateOption = useMutation(api.taxonomies.mutations.updateOption);
+	const removeOption = useMutation(api.taxonomies.mutations.removeOption);
 	const [pendingKey, setPendingKey] = useState<TaxonomyKey | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const inFlight = useRef(false);

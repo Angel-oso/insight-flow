@@ -3,7 +3,7 @@ import type { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { taxonomyToneChart, type TaxonomyTone } from "@/lib/taxonomy";
 
-export type OverviewQueryData = FunctionReturnType<typeof api.overview.get>;
+export type OverviewQueryData = FunctionReturnType<typeof api.dashboard.overview.get>;
 
 export type OverviewMetricTone = "primary" | "info" | "danger" | "success";
 

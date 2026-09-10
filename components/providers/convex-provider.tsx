@@ -1,6 +1,7 @@
 "use client";
 
-import { ConvexProvider, ConvexReactClient } from "convex/react";
+import { ConvexAuthProvider } from "@convex-dev/auth/react";
+import { ConvexReactClient } from "convex/react";
 import { useState, type ReactNode } from "react";
 
 export function ConvexClientProvider({
@@ -13,5 +14,5 @@ export function ConvexClientProvider({
 		if (!url) throw new Error("NEXT_PUBLIC_CONVEX_URL is not configured.");
 		return new ConvexReactClient(url);
 	});
-	return <ConvexProvider client={client}>{children}</ConvexProvider>;
+	return <ConvexAuthProvider client={client}>{children}</ConvexAuthProvider>;
 }

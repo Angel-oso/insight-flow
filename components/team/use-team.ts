@@ -17,7 +17,7 @@ function useTeamClock() {
 /** Live project team; undefined while the query loads. */
 export function useProjectTeam(projectSlug: string): PresentedTeam | undefined {
 	const now = useTeamClock();
-	const data = useQuery(api.team.get, { projectSlug });
+	const data = useQuery(api.team.queries.get, { projectSlug });
 	if (!data) return undefined;
 	return presentTeam(data, now);
 }

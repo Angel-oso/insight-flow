@@ -21,7 +21,7 @@ export function useProjectOverview(
 	projectSlug: string,
 ): PresentedOverview | undefined {
 	const now = useOverviewClock();
-	const data = useQuery(api.overview.get, {
+	const data = useQuery(api.dashboard.overview.get, {
 		projectSlug,
 		rangeDays: OVERVIEW_RANGE_DAYS,
 		now,

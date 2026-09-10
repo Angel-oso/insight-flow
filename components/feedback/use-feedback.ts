@@ -29,7 +29,7 @@ export function useFeedbackDetail(
 	finals: ReadonlySet<string>,
 ) {
 	const data = useQuery(
-		api.feedback.detail,
+		api.feedback.queries.detail,
 		feedbackId ? { projectSlug, feedbackId } : "skip",
 	);
 	return data
@@ -41,8 +41,8 @@ export function useFeedbackDetail(
 }
 
 export function useFeedbackWrites(projectSlug: string) {
-	const update = useMutation(api.feedback.update);
-	const comment = useMutation(api.feedback.addComment);
+	const update = useMutation(api.feedback.mutations.update);
+	const comment = useMutation(api.feedback.mutations.addComment);
 	const [pending, setPending] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const inFlight = useRef(false);

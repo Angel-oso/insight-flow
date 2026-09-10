@@ -15,11 +15,11 @@ export type ProjectSettingsUpdate = {
 };
 
 export function useProjectSettingsData(projectSlug: string) {
-	return useQuery(api.projectSettings.get, { projectSlug });
+	return useQuery(api.projects.settings.get, { projectSlug });
 }
 
 export function useProjectSettingsWrites(projectSlug: string) {
-	const update = useMutation(api.projectSettings.update);
+	const update = useMutation(api.projects.settings.update);
 	const [pending, setPending] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const inFlight = useRef(false);
