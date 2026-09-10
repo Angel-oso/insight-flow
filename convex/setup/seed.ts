@@ -1,7 +1,7 @@
 import { v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
-import { internalMutation } from "./_generated/server";
-import { ensureTaxonomies } from "./taxonomies";
+import type { Doc } from "../_generated/dataModel";
+import { internalMutation } from "../_generated/server";
+import { ensureTaxonomies } from "../taxonomies/lib";
 
 const members = [
 	{ name: "Sarah Johnson", email: "sarah@example.com", role: "admin" },
@@ -129,7 +129,7 @@ export const run = internalMutation({
 		for (const { name, email } of members) {
 			const user = await ctx.db
 				.query("users")
-				.withIndex("by_email", (q) => q.eq("email", email))
+				.withIndex("email", (q) => q.eq("email", email))
 				.unique();
 			userIds.push(
 				user?._id ?? (await ctx.db.insert("users", { name, email })),
