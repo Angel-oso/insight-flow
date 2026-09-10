@@ -1,12 +1,12 @@
-# InsightFlow demo database
+# InsightFlow backend
 
-Base sencilla para las páginas actuales. La página de feedback consume Convex
-para la cola, el detalle, los comentarios y las actividades; las demás páginas
-todavía conservan sus datos de demostración locales.
+Convex backend: la página de feedback consume queries para la cola, el
+detalle, los comentarios y las actividades; el resto de superficies leen
+dashboard, equipo, ajustes y taxonomías del mismo backend.
 
 ## Páginas y datos
 
-| Ruta | Datos preparados |
+| Ruta | Datos servidos |
 | --- | --- |
 | `/projects/[projectSlug]/home` | Feedback por fecha, estado, categoría, prioridad y responsable; actividad reciente. |
 | `/projects/[projectSlug]/feedback` | Feedback, remitentes opcionales, asignaciones, comentarios e historial. |
@@ -20,44 +20,27 @@ proyectos. `feedback` pertenece a un proyecto; `comments` y `activities` apuntan
 al feedback mediante IDs de Convex.
 
 El enlace de entrada usa el slug global del proyecto y `inboxEnabled`; no necesita
-otra tabla para esta demo. Las categorías son fijas, como en los ajustes actuales.
+otra tabla. Las categorías son fijas, como en los ajustes actuales.
 Las métricas, carga de trabajo, iniciales y antigüedad se derivarán de los datos;
 no se guardan contadores ni textos relativos como "Yesterday". Las fechas de
 negocio usan milisegundos UTC; `_creationTime` indica cuándo se insertó el documento.
 `completedAt` permite calcular la tendencia de resoluciones.
 
-## Datos de ejemplo
+## Autenticación y autorización
 
-- 1 organización: Acme Studio (Demo).
-- 5 usuarios y 5 membresías, con correos ficticios `example.com`.
-- 3 proyectos: Client Portal, Mobile App y Academy; 8 accesos a proyectos.
-- 18 registros de feedback: los 6 estados y las 5 categorías, con distintas
-  prioridades, casos sin responsable y remitentes anónimos.
-- 3 comentarios y 36 actividades.
+Convex Auth (Google OAuth + email/password) con las tablas `auth*` fusionadas
+en el esquema. Ninguna función acepta identidad del cliente: cada query y
+mutation resuelve al llamante con `getAuthUserId`, exige su `membership` en la
+organización y su link `projectMembers` al proyecto, y aplica capabilities por
+rol (`lib/auth/permissions`). `users.current` expone solo la fila propia;
+`setup.status` decide el acceso del shell.
 
-Con el servidor Convex configurado en marcha:
+Con el servidor Convex en marcha (`npx convex dev` en otra terminal), la
+configuración usa el deployment de `.env.local` en `http://127.0.0.1:3210`.
 
-```sh
-pnpm exec convex run seed:run --push
-```
-
-Este comando aplica el esquema y ejecuta la carga. Si el servidor local está
-apagado, inicia primero `pnpm exec convex dev` en otra terminal.
-La configuración verificada usa `anonymous:anonymous-insight-flow` en
-`http://127.0.0.1:3210`; estos datos están en Convex local, no en la nube.
-
-`seed:run` es una mutación interna y atómica. Si ya existe `acme-studio-demo`,
-devuelve `created: false` sin duplicar ni modificar los datos. No es una rutina
-de reparación si se borran filas manualmente. Un conflicto de slug con otro
-proyecto cancela la transacción completa.
-
-No se han añadido autenticación, endpoints públicos, envío de notificaciones ni
-un formulario público. Las preferencias y roles están almacenados para la demo;
-la autorización deberá implementarse al conectar la interfaz.
-
-Verificado: despliegue local, TypeScript, ESLint, referencias de feedback,
-comentarios y actividades, responsables dentro del proyecto y repetición de la
-carga sin duplicados.
+Verificado: despliegue local, TypeScript, ESLint, suite de seguridad
+(`convex/security.test.ts`), referencias de feedback, comentarios y
+actividades, y responsables dentro del proyecto.
 
 Referencia: [esquemas de Convex](https://docs.convex.dev/database/schemas).
 
