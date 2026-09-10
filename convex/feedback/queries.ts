@@ -28,7 +28,7 @@ export const workspace = query({
 			)
 			.take(51);
 		if (links.length > 50)
-			throw new ConvexError("This demo supports up to 50 project members.");
+			throw new ConvexError("This workspace supports up to 50 project members.");
 		const assignees = [];
 		for (const link of links) {
 			const membership = await ctx.db.get("memberships", link.membershipId);

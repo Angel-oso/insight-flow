@@ -72,7 +72,7 @@ export function requireCapability(
 
 /**
  * Bounded project feedback listing shared by workspace and overview reads.
- * Projects stay small in this demo; the explicit cap keeps every reader
+ * Projects stay small in this release; the explicit cap keeps every reader
  * honest instead of silently truncating.
  */
 export async function listProjectFeedback(
@@ -86,7 +86,7 @@ export async function listProjectFeedback(
 		.take(201);
 	if (items.length > 200)
 		throw new ConvexError(
-			"This demo supports up to 200 feedback items per project.",
+			"This workspace supports up to 200 feedback items per project.",
 		);
 	return items;
 }

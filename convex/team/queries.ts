@@ -48,7 +48,7 @@ export const get = query({
 			.withIndex("by_projectId_membershipId", (q) => q.eq("projectId", projectId))
 			.take(51);
 		if (links.length > 50)
-			throw new Error("This demo supports up to 50 project members.");
+			throw new Error("This workspace supports up to 50 project members.");
 
 		// Project-level backlog for the unassigned count (bounded, shared cap).
 		const items = await listProjectFeedback(ctx, projectId);
