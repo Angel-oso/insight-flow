@@ -1,14 +1,14 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
-import type { Doc, Id } from "./_generated/dataModel";
-import { listProjectFeedback, requireProject } from "./feedback/access";
+import { query } from "../_generated/server";
+import type { Doc, Id } from "../_generated/dataModel";
+import { listProjectFeedback, requireProject } from "../feedback/access";
 import {
 	getFinalStatuses,
 	getPriorityRanks,
 	getTaxonomies,
 	taxonomiesValidator,
-} from "./taxonomies";
-import schema from "./schema";
+} from "../taxonomies/lib";
+import schema from "../schema";
 
 const dayMs = 24 * 60 * 60 * 1000;
 const staleDays = 7;

@@ -1,8 +1,8 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
-import { requireCapability, requireProject } from "./feedback/access";
-import { getTaxonomies } from "./taxonomies";
-import schema from "./schema";
+import { mutation, query } from "../_generated/server";
+import { requireCapability, requireProject } from "../feedback/access";
+import { getTaxonomies } from "../taxonomies/lib";
+import schema from "../schema";
 
 const settingsChanges = v.object({
 	name: v.optional(v.string()),
@@ -89,5 +89,23 @@ export const update = mutation({
 		if (!changed) return null;
 		await ctx.db.patch("projects", project._id, patch);
 		return null;
+	},
+});
+
+/**
+ * The caller's role in this project, server-decided for capability UI.
+ * Returns null for anonymous callers and non-members so the settings
+ * page can hide itself exactly like a denied reader.
+ */
+export const role = query({
+	args: { projectSlug: v.string() },
+	returns: v.union(schema.tables.memberships.validator.fields.role, v.null()),
+	handler: async (ctx, { projectSlug }) => {
+		try {
+			const { member } = await requireProject(ctx, projectSlug);
+			return member.role;
+		} catch {
+			return null;
+		}
 	},
 });

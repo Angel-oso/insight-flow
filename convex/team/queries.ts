@@ -1,9 +1,9 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
-import type { Doc, Id } from "./_generated/dataModel";
-import { listProjectFeedback, requireProject } from "./feedback/access";
-import { getFinalStatuses, getPriorityRanks, getTaxonomies } from "./taxonomies";
-import schema from "./schema";
+import { query } from "../_generated/server";
+import type { Doc, Id } from "../_generated/dataModel";
+import { listProjectFeedback, requireProject } from "../feedback/access";
+import { getFinalStatuses, getPriorityRanks, getTaxonomies } from "../taxonomies/lib";
+import schema from "../schema";
 
 function isOpen(item: Doc<"feedback">, finals: ReadonlySet<string>) {
 	return !finals.has(item.status);
@@ -97,8 +97,8 @@ export const get = query({
 				.take(51);
 			members.push({
 				id: user._id,
-				name: user.name,
-				email: user.email,
+				name: user.name ?? "Unknown member",
+				email: user.email ?? "",
 				role: membership.role,
 				projectCount: scope.length,
 				openAssigned,

@@ -1,12 +1,27 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError } from "convex/values";
 import { hasCapability, type Capability } from "../../lib/auth/permissions";
 import type { Id } from "../_generated/dataModel";
-import { env, type QueryCtx } from "../_generated/server";
+import type { QueryCtx } from "../_generated/server";
 
-/** Shared demo identity, deliberately NOT an authenticated user session. */
+/**
+ * Verified caller identity. The user id always comes from the Convex Auth
+ * session — never from a client-supplied argument — so a caller cannot
+ * impersonate another member by passing their id.
+ */
+export async function requireUserId(ctx: QueryCtx): Promise<Id<"users">> {
+	const userId = await getAuthUserId(ctx);
+	if (!userId) throw new ConvexError("Sign in to access this workspace.");
+	return userId as Id<"users">;
+}
+
+/**
+ * Project access for the signed-in caller: the project must exist, the
+ * caller must belong to its organization, and that membership must reach
+ * the project through an explicit project link.
+ */
 export async function requireProject(ctx: QueryCtx, slug: string) {
-	if (env.DEMO_ENABLED !== "true")
-		throw new ConvexError("The demo workspace is unavailable.");
+	const userId = await requireUserId(ctx);
 	const project = await ctx.db
 		.query("projects")
 		.withIndex("by_slug", (q) => q.eq("slug", slug))
@@ -16,14 +31,11 @@ export async function requireProject(ctx: QueryCtx, slug: string) {
 		"organizations",
 		project.organizationId,
 	);
-	if (!organization || organization.slug !== "acme-studio-demo")
-		throw new ConvexError("Project not available in this demo.");
+	if (!organization) throw new ConvexError("Project not found.");
 	const member = await ctx.db
 		.query("memberships")
 		.withIndex("by_organizationId_userId", (q) =>
-			q
-				.eq("organizationId", organization._id)
-				.eq("userId", organization.ownerId),
+			q.eq("organizationId", organization._id).eq("userId", userId),
 		)
 		.unique();
 	if (!member || !hasCapability(member.role, "feedback.view"))
@@ -35,7 +47,7 @@ export async function requireProject(ctx: QueryCtx, slug: string) {
 		)
 		.unique();
 	if (!access) throw new ConvexError("Project access denied.");
-	return { project, member };
+	return { project, member, organization };
 }
 
 export async function requireFeedback(
