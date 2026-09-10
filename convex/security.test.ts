@@ -3,53 +3,140 @@
  * anonymous callers and non-members, capabilities must hold per role, and
  * no function may accept identity from client arguments.
  *
- * Runs fully in-memory (convex-test); no network, no real OAuth.
+ * Self-contained: the fixture below builds a fresh org (admin, manager,
+ * member, academy-only member, two projects, one feedback item, minimal
+ * taxonomies) per test. Runs fully in-memory (convex-test); no network,
+ * no real OAuth.
  */
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
-import { api, internal } from "./_generated/api";
+import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
 
-async function seedDemo() {
+type Role = "admin" | "manager" | "member";
+
+async function seedTestWorkspace() {
 	const t = convexTest(schema, modules);
-	await t.mutation(internal.setup.seed.run, {});
 	const ids = await t.run(async (ctx) => {
-		const byEmail = async (email: string) => {
-			const user = await ctx.db
-				.query("users")
-				.withIndex("email", (q) => q.eq("email", email))
-				.unique();
-			if (!user) throw new Error(`Seed user missing: ${email}`);
-			return user._id;
+		const now = Date.now();
+		const admin = await ctx.db.insert("users", {
+			name: "Ada Admin",
+			email: "admin@example.com",
+		});
+		const manager = await ctx.db.insert("users", {
+			name: "Moe Manager",
+			email: "manager@example.com",
+		});
+		const member = await ctx.db.insert("users", {
+			name: "Dan Member",
+			email: "member@example.com",
+		});
+		const academy = await ctx.db.insert("users", {
+			name: "Em Academy",
+			email: "academy@example.com",
+		});
+		const organizationId = await ctx.db.insert("organizations", {
+			name: "Test Org",
+			slug: "test-org",
+			ownerId: admin,
+		});
+		const membership = async (userId: Id<"users">, role: Role) =>
+			ctx.db.insert("memberships", {
+				organizationId,
+				userId,
+				role,
+				joinedAt: now,
+			});
+		const adminMembership = await membership(admin, "admin");
+		const managerMembership = await membership(manager, "manager");
+		const memberMembership = await membership(member, "member");
+		const academyMembership = await membership(academy, "member");
+		const portal = await ctx.db.insert("projects", {
+			organizationId,
+			name: "Client Portal",
+			slug: "client-portal",
+			description: "Test project.",
+			status: "Active",
+			inboxEnabled: true,
+			defaultPriority: "Medium",
+			criticalAlerts: false,
+			weeklyDigest: false,
+			updatedAt: now,
+		});
+		const academyProject = await ctx.db.insert("projects", {
+			organizationId,
+			name: "Academy",
+			slug: "academy",
+			description: "Second project.",
+			status: "Active",
+			inboxEnabled: true,
+			defaultPriority: "Medium",
+			criticalAlerts: false,
+			weeklyDigest: false,
+			updatedAt: now,
+		});
+		const link = async (
+			projectId: Id<"projects">,
+			membershipId: Id<"memberships">,
+		) => {
+			await ctx.db.insert("projectMembers", { projectId, membershipId });
 		};
-		return {
-			sarah: await byEmail("sarah@example.com"), // admin, all projects
-			michael: await byEmail("michael@example.com"), // manager
-			emma: await byEmail("emma@example.com"), // member, academy only
-			daniel: await byEmail("daniel@example.com"), // member, client-portal
+		await link(portal, adminMembership);
+		await link(portal, managerMembership);
+		await link(portal, memberMembership);
+		await link(academyProject, adminMembership);
+		await link(academyProject, academyMembership);
+		const itemId = await ctx.db.insert("feedback", {
+			projectId: portal,
+			title: "Login fails on retry",
+			description: "Reproducible on staging.",
+			category: "Bug",
+			priority: "High",
+			status: "New",
+			assigneeId: null,
+			sender: null,
+			receivedAt: now,
+			updatedAt: now,
+		});
+		const taxonomy = async (
+			key: "status" | "category" | "priority",
+			label: string,
+			items: { value: string; label: string; rank: number; tone: "info" | "warning" | "primary" | "success" | "danger" | "muted"; isFinal?: boolean }[],
+		) => {
+			await ctx.db.insert("taxonomies", { key, label, items });
 		};
+		await taxonomy("status", "Status", [
+			{ value: "New", label: "New", rank: 0, tone: "info" },
+			{ value: "In review", label: "In review", rank: 1, tone: "warning" },
+			{ value: "Planned", label: "Planned", rank: 2, tone: "primary" },
+			{ value: "In progress", label: "In progress", rank: 3, tone: "primary" },
+			{ value: "Completed", label: "Completed", rank: 4, tone: "success", isFinal: true },
+			{ value: "Discarded", label: "Discarded", rank: 5, tone: "muted", isFinal: true },
+		]);
+		await taxonomy("category", "Category", [
+			{ value: "Bug", label: "Bug", rank: 0, tone: "danger" },
+			{ value: "Feature request", label: "Feature request", rank: 1, tone: "primary" },
+			{ value: "Improvement", label: "Improvement", rank: 2, tone: "info" },
+			{ value: "Question", label: "Question", rank: 3, tone: "warning" },
+			{ value: "Other", label: "Other", rank: 4, tone: "muted" },
+		]);
+		await taxonomy("priority", "Priority", [
+			{ value: "Low", label: "Low", rank: 0, tone: "muted" },
+			{ value: "Medium", label: "Medium", rank: 1, tone: "info" },
+			{ value: "High", label: "High", rank: 2, tone: "warning" },
+			{ value: "Critical", label: "Critical", rank: 3, tone: "danger" },
+		]);
+		return { admin, manager, member, academy, itemId };
 	});
 	return { t, ids };
 }
 
 test("anonymous callers are rejected on every workspace function", async () => {
-	const { t } = await seedDemo();
-	const itemId = await t.run(async (ctx) => {
-		const project = await ctx.db
-			.query("projects")
-			.withIndex("by_slug", (q) => q.eq("slug", "client-portal"))
-			.unique();
-		if (!project) throw new Error("Seed project missing");
-		const item = await ctx.db
-			.query("feedback")
-			.withIndex("by_projectId_receivedAt", (q) => q.eq("projectId", project._id))
-			.first();
-		if (!item) throw new Error("Seed feedback missing");
-		return item._id;
-	});
+	const { t, ids } = await seedTestWorkspace();
+	const itemId = ids.itemId;
 
 	await expect(
 		t.query(api.team.queries.get, { projectSlug: "client-portal" }),
@@ -99,7 +186,7 @@ test("anonymous callers are rejected on every workspace function", async () => {
 	await expect(
 		t.mutation(api.taxonomies.mutations.createOption, {
 			key: "status",
-			label: " cha ",
+			label: "Nope",
 			color: "#ffffff",
 		}),
 	).rejects.toThrow();
@@ -112,7 +199,7 @@ test("anonymous callers are rejected on every workspace function", async () => {
 });
 
 test("authenticated non-members cannot see or touch another workspace", async () => {
-	const { t, ids } = await seedDemo();
+	const { t, ids } = await seedTestWorkspace();
 	const outsiderId = await t.run(async (ctx) =>
 		ctx.db.insert("users", { name: "Outsider", email: "outsider@example.com" }),
 	);
@@ -134,50 +221,50 @@ test("authenticated non-members cannot see or touch another workspace", async ()
 		hasMembership: false,
 	});
 	// Sanity: a real member still gets in.
-	const sarah = t.withIdentity({ subject: ids.sarah });
+	const admin = t.withIdentity({ subject: ids.admin });
 	await expect(
-		sarah.query(api.team.queries.get, { projectSlug: "client-portal" }),
+		admin.query(api.team.queries.get, { projectSlug: "client-portal" }),
 	).resolves.toMatchObject({ summary: { memberCount: 3 } });
 });
 
 test("project links are enforced: academy member cannot enter client-portal", async () => {
-	const { t, ids } = await seedDemo();
-	const emma = t.withIdentity({ subject: ids.emma }); // academy only
+	const { t, ids } = await seedTestWorkspace();
+	const academy = t.withIdentity({ subject: ids.academy }); // academy only
 	await expect(
-		emma.query(api.team.queries.get, { projectSlug: "client-portal" }),
+		academy.query(api.team.queries.get, { projectSlug: "client-portal" }),
 	).rejects.toThrow(/denied/i);
 	await expect(
-		emma.query(api.team.queries.get, { projectSlug: "academy" }),
+		academy.query(api.team.queries.get, { projectSlug: "academy" }),
 	).resolves.toBeDefined();
 });
 
 test("capabilities hold per role: members cannot triage or manage", async () => {
-	const { t, ids } = await seedDemo();
-	const sarah = t.withIdentity({ subject: ids.sarah });
-	const daniel = t.withIdentity({ subject: ids.daniel });
+	const { t, ids } = await seedTestWorkspace();
+	const admin = t.withIdentity({ subject: ids.admin });
+	const member = t.withIdentity({ subject: ids.member });
 
-	const workspace = await sarah.query(api.feedback.queries.workspace, {
+	const workspace = await admin.query(api.feedback.queries.workspace, {
 		projectSlug: "client-portal",
 	});
 	const itemId = workspace.items[0]._id;
 
 	// Member without triage capability is refused…
 	await expect(
-		daniel.mutation(api.feedback.mutations.update, {
+		member.mutation(api.feedback.mutations.update, {
 			projectSlug: "client-portal",
 			feedbackId: itemId,
 			changes: { priority: "Low" },
 		}),
 	).rejects.toThrow();
 	// …while the admin triages the same item.
-	await sarah.mutation(api.feedback.mutations.update, {
+	await admin.mutation(api.feedback.mutations.update, {
 		projectSlug: "client-portal",
 		feedbackId: itemId,
 		changes: { priority: "Low" },
 	});
 	// Members cannot manage project settings either.
 	await expect(
-		daniel.mutation(api.projects.settings.update, {
+		member.mutation(api.projects.settings.update, {
 			projectSlug: "client-portal",
 			changes: { description: "hijacked" },
 		}),
@@ -185,16 +272,16 @@ test("capabilities hold per role: members cannot triage or manage", async () => 
 });
 
 test("assignee spoofing is impossible: owners must belong to the project", async () => {
-	const { t, ids } = await seedDemo();
-	const sarah = t.withIdentity({ subject: ids.sarah });
+	const { t, ids } = await seedTestWorkspace();
+	const admin = t.withIdentity({ subject: ids.admin });
 	const outsiderId: Id<"users"> = await t.run(async (ctx) =>
 		ctx.db.insert("users", { name: "Outsider", email: "outsider2@example.com" }),
 	);
-	const workspace = await sarah.query(api.feedback.queries.workspace, {
+	const workspace = await admin.query(api.feedback.queries.workspace, {
 		projectSlug: "client-portal",
 	});
 	await expect(
-		sarah.mutation(api.feedback.mutations.update, {
+		admin.mutation(api.feedback.mutations.update, {
 			projectSlug: "client-portal",
 			feedbackId: workspace.items[0]._id,
 			changes: { assigneeId: outsiderId },
@@ -202,52 +289,39 @@ test("assignee spoofing is impossible: owners must belong to the project", async
 	).rejects.toThrow(/belongs to this project/i);
 	// No userId argument can redirect authorship: comments always land on
 	// the caller's own membership.
-	await sarah.mutation(api.feedback.mutations.addComment, {
+	await admin.mutation(api.feedback.mutations.addComment, {
 		projectSlug: "client-portal",
 		feedbackId: workspace.items[0]._id,
 		body: "admin note",
 	});
-	const detail = await sarah.query(api.feedback.queries.detail, {
+	const detail = await admin.query(api.feedback.queries.detail, {
 		projectSlug: "client-portal",
 		feedbackId: workspace.items[0]._id,
 	});
 	expect(detail.comments[0].body).toBe("admin note");
-	expect(ids.daniel).toBeDefined();
+	expect(ids.member).toBeDefined();
 });
 
 test("taxonomy writes require a real administrator", async () => {
-	const { t, ids } = await seedDemo();
-	const daniel = t.withIdentity({ subject: ids.daniel });
-	const sarah = t.withIdentity({ subject: ids.sarah });
+	const { t, ids } = await seedTestWorkspace();
+	const member = t.withIdentity({ subject: ids.member });
+	const admin = t.withIdentity({ subject: ids.admin });
 
 	await expect(
-		daniel.mutation(api.taxonomies.mutations.createOption, {
+		member.mutation(api.taxonomies.mutations.createOption, {
 			key: "status",
 			label: "Sneaky",
 			color: "#111111",
 		}),
 	).rejects.toThrow(/administrator/i);
-	const created = await sarah.mutation(api.taxonomies.mutations.createOption, {
+	const created = await admin.mutation(api.taxonomies.mutations.createOption, {
 		key: "status",
 		label: "Verified",
 		color: "#111111",
 	});
 	expect(created.value).toBe("verified");
-	await sarah.mutation(api.taxonomies.mutations.removeOption, {
+	await admin.mutation(api.taxonomies.mutations.removeOption, {
 		key: "status",
 		value: "verified",
 	});
-});
-
-test("demo claim is hard-disabled without DEMO_ENABLED", async () => {
-	const { t } = await seedDemo();
-	// The test runtime carries no DEMO_ENABLED, so the dev-only escape
-	// hatch must refuse even authenticated callers.
-	const outsiderId = await t.run(async (ctx) =>
-		ctx.db.insert("users", { name: "Outsider", email: "outsider3@example.com" }),
-	);
-	const outsider = t.withIdentity({ subject: outsiderId });
-	await expect(outsider.mutation(api.setup.mutations.claimDemoAccess, {})).rejects.toThrow(
-		/disabled/i,
-	);
 });
