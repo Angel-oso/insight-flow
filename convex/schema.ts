@@ -1,3 +1,4 @@
+import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
@@ -11,10 +12,11 @@ const role = v.union(
 // The unions below document the seeded defaults only.
 
 export default defineSchema({
-	users: defineTable({
-		name: v.string(),
-		email: v.string(),
-	}).index("by_email", ["email"]),
+	// Convex Auth tables (users, sessions, accounts, verifiers, rate
+	// limits). `users` keeps every field optional: OAuth and password
+	// flows create the row before the profile is complete, so readers must
+	// fall back on missing name/email instead of assuming them.
+	...authTables,
 	organizations: defineTable({
 		name: v.string(),
 		slug: v.string(),
@@ -25,7 +27,9 @@ export default defineSchema({
 		userId: v.id("users"),
 		role,
 		joinedAt: v.number(),
-	}).index("by_organizationId_userId", ["organizationId", "userId"]),
+	})
+		.index("by_organizationId_userId", ["organizationId", "userId"])
+		.index("by_userId", ["userId"]),
 	projects: defineTable({
 		organizationId: v.id("organizations"),
 		name: v.string(),
