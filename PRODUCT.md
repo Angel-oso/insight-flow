@@ -281,7 +281,7 @@ The visual language should be calm, data-literate, and credible for a modern B2B
 
 ### Phase 3 — Backend, authentication, and persistence
 
-- Add authentication, organizations, memberships, projects, feedback links, feedback, comments, and activity.
+- Add authentication, organizations, user roles and permissions, project access, feedback links, feedback, comments, and activity.
 - Enforce organization and role access at the database boundary.
 - Replace simulated metrics with database-backed aggregates.
 

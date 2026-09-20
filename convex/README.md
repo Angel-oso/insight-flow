@@ -10,13 +10,14 @@ dashboard, equipo, ajustes y taxonomías del mismo backend.
 | --- | --- |
 | `/projects/[projectSlug]/home` | Feedback por fecha, estado, categoría, prioridad y responsable; actividad reciente. |
 | `/projects/[projectSlug]/feedback` | Feedback, remitentes opcionales, asignaciones, comentarios e historial. |
-| `/projects/[projectSlug]/team` | Usuarios, roles de organización, fecha de ingreso y acceso a proyectos. |
+| `/projects/[projectSlug]/team` | Usuarios, roles asignados, fecha de ingreso y acceso a proyectos. |
 | `/projects/[projectSlug]/settings` | Identidad, estado, recepción de feedback, prioridad inicial y preferencias de notificaciones. |
 | `/home`, `/feedback`, `/team` | Redirigen a Client Portal; no requieren tablas adicionales. |
 
-`organizations` agrupa `projects` y `memberships`; estas relacionan `users` con
-roles `admin`, `manager` o `member`. `projectMembers` asigna esas membresías a
-proyectos. `feedback` pertenece a un proyecto; `comments` y `activities` apuntan
+`organizations` agrupa `projects`. Cada usuario guarda su `organizationId` y
+sus `roleIds`; `roles` contiene `admin`, `manager` y `member`, y cada rol
+referencia sus permisos en `permissions`. `projectMembers` asigna usuarios
+directamente a proyectos. `feedback` pertenece a un proyecto; `comments` y `activities` apuntan
 al feedback mediante IDs de Convex.
 
 El enlace de entrada usa el slug global del proyecto y `inboxEnabled`; no necesita
@@ -30,10 +31,16 @@ negocio usan milisegundos UTC; `_creationTime` indica cuándo se insertó el doc
 
 Convex Auth (Google OAuth + email/password) con las tablas `auth*` fusionadas
 en el esquema. Ninguna función acepta identidad del cliente: cada query y
-mutation resuelve al llamante con `getAuthUserId`, exige su `membership` en la
-organización y su link `projectMembers` al proyecto, y aplica capabilities por
-rol (`lib/auth/permissions`). `users.current` expone solo la fila propia;
-`setup.status` decide el acceso del shell.
+mutation resuelve al llamante con `getAuthUserId` y exige que su organización
+coincida con la del proyecto. `projectMembers` limita el acceso a proyectos;
+el permiso `organization.manage` concede acceso a todos los proyectos de esa
+organización.
+Las operaciones se autorizan con los permisos guardados en `roles` y
+`permissions`; `lib/auth/permissions` define las claves válidas. Cambiar los
+permisos de un rol afecta a sus usuarios sin editar cada cuenta.
+`users.current` expone solo la fila propia; `setup.status` decide el acceso
+del shell. La carga inicial del catálogo y la asignación de roles se hacen
+desde funciones internas del backend.
 
 Con el servidor Convex en marcha (`npx convex dev` en otra terminal), la
 configuración usa el deployment de `.env.local` en `http://127.0.0.1:3210`.

@@ -129,10 +129,10 @@ lib/
 ## Data model
 
 ```text
-organizations ─┬─ memberships (user + role) ─┬─ projectMembers ── projects
-               │                              │
-               └─ users                       └─ feedback ─┬─ comments
-                                                          └─ activities
+organizations ── users (assigned role IDs) ── projectMembers ── projects
+                    │                                           │
+                    └─ roles ── permissions                    └─ feedback ─┬─ comments
+                                                                            └─ activities
 
 taxonomies (global): status · category · priority  →  JSON display metadata
 ```
