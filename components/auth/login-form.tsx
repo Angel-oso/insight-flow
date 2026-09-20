@@ -1,7 +1,8 @@
 "use client";
 
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useState, type FormEvent } from "react";
+import { useConvexAuth } from "convex/react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,15 +23,32 @@ function validate(email: string, password: string): Errors {
 
 export function LoginForm() {
 	const { signIn } = useAuthActions();
+	const { isAuthenticated } = useConvexAuth();
 	const [showPassword, setShowPassword] = useState(false);
 	const [errors, setErrors] = useState<Errors>({});
 	const [busy, setBusy] = useState<"idle" | "google" | "password">("idle");
+
+	useEffect(() => {
+		if (busy === "idle" || isAuthenticated) return;
+
+		const timeout = window.setTimeout(() => {
+			setBusy("idle");
+			setErrors({
+				form: "Sign-in did not finish. Check your connection and try again.",
+			});
+		}, 15000);
+		return () => window.clearTimeout(timeout);
+	}, [busy, isAuthenticated]);
 
 	async function handleGoogle() {
 		setErrors({});
 		setBusy("google");
 		try {
-			await signIn("google");
+			const result = await signIn("google");
+			if (!result.redirect && !result.signingIn) {
+				setBusy("idle");
+				setErrors({ form: "Google sign-in did not start. Try again." });
+			}
 		} catch (error) {
 			setBusy("idle");
 			setErrors({
@@ -53,7 +71,11 @@ export function LoginForm() {
 
 		setBusy("password");
 		try {
-			await signIn("password", { email, password, flow: "signIn" });
+			const result = await signIn("password", { email, password, flow: "signIn" });
+			if (!result.signingIn) {
+				setBusy("idle");
+				setErrors({ form: "Sign-in did not finish. Check your details and try again." });
+			}
 		} catch (error) {
 			setBusy("idle");
 			setErrors({
