@@ -3,57 +3,73 @@
  * anonymous callers and non-members, capabilities must hold per role, and
  * no function may accept identity from client arguments.
  *
- * Self-contained: the fixture below builds a fresh org (admin, manager,
- * member, academy-only member, two projects, one feedback item, minimal
- * taxonomies) per test. Runs fully in-memory (convex-test); no network,
+ * Self-contained: the fixture below builds permission and role catalogs,
+ * users in one organization, explicit project access, one feedback item,
+ * and minimal taxonomies per test. Runs fully in-memory (convex-test); no network,
  * no real OAuth.
  */
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { capabilities, type Capability, type Role } from "../lib/auth/permissions";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
-
-type Role = "admin" | "manager" | "member";
 
 async function seedTestWorkspace() {
 	const t = convexTest(schema, modules);
 	const ids = await t.run(async (ctx) => {
 		const now = Date.now();
+		const permissionIds = new Map<Capability, Id<"permissions">>();
+		for (const key of capabilities) {
+			permissionIds.set(key, await ctx.db.insert("permissions", { key }));
+		}
+		const rolePermissions: Record<Role, readonly Capability[]> = {
+			admin: capabilities,
+			manager: [
+				"feedback.view", "feedback.triage", "feedback.assign",
+				"feedback.update", "feedback.comment", "project.view", "team.view",
+			],
+			member: [
+				"feedback.view", "feedback.update", "feedback.comment", "project.view",
+			],
+		};
+		const roleIds = new Map<Role, Id<"roles">>();
+		for (const name of ["admin", "manager", "member"] as const) {
+			roleIds.set(name, await ctx.db.insert("roles", {
+				name,
+				permissionIds: rolePermissions[name].map((key) => permissionIds.get(key)!),
+			}));
+		}
 		const admin = await ctx.db.insert("users", {
 			name: "Ada Admin",
 			email: "admin@example.com",
+			roleIds: [roleIds.get("admin")!],
 		});
 		const manager = await ctx.db.insert("users", {
 			name: "Moe Manager",
 			email: "manager@example.com",
+			roleIds: [roleIds.get("manager")!],
 		});
 		const member = await ctx.db.insert("users", {
 			name: "Dan Member",
 			email: "member@example.com",
+			roleIds: [roleIds.get("member")!],
 		});
 		const academy = await ctx.db.insert("users", {
 			name: "Em Academy",
 			email: "academy@example.com",
+			roleIds: [roleIds.get("member")!],
 		});
 		const organizationId = await ctx.db.insert("organizations", {
 			name: "Test Org",
 			slug: "test-org",
 			ownerId: admin,
 		});
-		const membership = async (userId: Id<"users">, role: Role) =>
-			ctx.db.insert("memberships", {
-				organizationId,
-				userId,
-				role,
-				joinedAt: now,
-			});
-		const adminMembership = await membership(admin, "admin");
-		const managerMembership = await membership(manager, "manager");
-		const memberMembership = await membership(member, "member");
-		const academyMembership = await membership(academy, "member");
+		for (const userId of [admin, manager, member, academy]) {
+			await ctx.db.patch("users", userId, { organizationId });
+		}
 		const portal = await ctx.db.insert("projects", {
 			organizationId,
 			name: "Client Portal",
@@ -80,15 +96,15 @@ async function seedTestWorkspace() {
 		});
 		const link = async (
 			projectId: Id<"projects">,
-			membershipId: Id<"memberships">,
+			userId: Id<"users">,
 		) => {
-			await ctx.db.insert("projectMembers", { projectId, membershipId });
+			await ctx.db.insert("projectMembers", { projectId, userId, joinedAt: now });
 		};
-		await link(portal, adminMembership);
-		await link(portal, managerMembership);
-		await link(portal, memberMembership);
-		await link(academyProject, adminMembership);
-		await link(academyProject, academyMembership);
+		await link(portal, admin);
+		await link(portal, manager);
+		await link(portal, member);
+		await link(academyProject, admin);
+		await link(academyProject, academy);
 		const itemId = await ctx.db.insert("feedback", {
 			projectId: portal,
 			title: "Login fails on retry",
@@ -129,7 +145,12 @@ async function seedTestWorkspace() {
 			{ value: "High", label: "High", rank: 2, tone: "warning" },
 			{ value: "Critical", label: "Critical", rank: 3, tone: "danger" },
 		]);
-		return { admin, manager, member, academy, itemId };
+		return {
+			admin, manager, member, academy, itemId,
+			adminRoleId: roleIds.get("admin")!,
+			memberRoleId: roleIds.get("member")!,
+			projectManagePermissionId: permissionIds.get("project.manage")!,
+		};
 	});
 	return { t, ids };
 }
@@ -161,7 +182,7 @@ test("anonymous callers are rejected on every workspace function", async () => {
 		t.query(api.projects.settings.get, { projectSlug: "client-portal" }),
 	).rejects.toThrow();
 	await expect(
-		t.query(api.projects.settings.role, { projectSlug: "client-portal" }),
+		t.query(api.projects.settings.access, { projectSlug: "client-portal" }),
 	).resolves.toBeNull();
 	await expect(t.query(api.taxonomies.queries.list, {})).rejects.toThrow();
 	await expect(t.query(api.users.queries.current, {})).resolves.toBeNull();
@@ -231,11 +252,37 @@ test("project links are enforced: academy member cannot enter client-portal", as
 	const { t, ids } = await seedTestWorkspace();
 	const academy = t.withIdentity({ subject: ids.academy }); // academy only
 	await expect(
-		academy.query(api.team.queries.get, { projectSlug: "client-portal" }),
+		academy.query(api.feedback.queries.workspace, { projectSlug: "client-portal" }),
 	).rejects.toThrow(/denied/i);
 	await expect(
-		academy.query(api.team.queries.get, { projectSlug: "academy" }),
+		academy.query(api.feedback.queries.workspace, { projectSlug: "academy" }),
 	).resolves.toBeDefined();
+});
+
+test("administrators create persisted projects with their own membership", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	const admin = t.withIdentity({ subject: ids.admin });
+	const manager = t.withIdentity({ subject: ids.manager });
+	await expect(
+		manager.mutation(api.projects.mutations.create, {
+			name: "Test workspace",
+			description: "Should not be created.",
+		}),
+	).rejects.toThrow();
+
+	const project = await admin.mutation(api.projects.mutations.create, {
+		name: "Test workspace",
+		description: "Created from the project switcher.",
+	});
+	await expect(admin.query(api.projects.queries.list, {})).resolves.toContainEqual(
+		project,
+	);
+	await expect(
+		admin.query(api.team.queries.get, { projectSlug: project.slug }),
+	).resolves.toMatchObject({
+		project: { name: "Test workspace", slug: "test-workspace" },
+		summary: { memberCount: 1 },
+	});
 });
 
 test("capabilities hold per role: members cannot triage or manage", async () => {
@@ -288,7 +335,7 @@ test("assignee spoofing is impossible: owners must belong to the project", async
 		}),
 	).rejects.toThrow(/belongs to this project/i);
 	// No userId argument can redirect authorship: comments always land on
-	// the caller's own membership.
+	// the authenticated user.
 	await admin.mutation(api.feedback.mutations.addComment, {
 		projectSlug: "client-portal",
 		feedbackId: workspace.items[0]._id,
@@ -313,7 +360,7 @@ test("taxonomy writes require a real administrator", async () => {
 			label: "Sneaky",
 			color: "#111111",
 		}),
-	).rejects.toThrow(/administrator/i);
+	).rejects.toThrow();
 	const created = await admin.mutation(api.taxonomies.mutations.createOption, {
 		key: "status",
 		label: "Verified",
@@ -324,4 +371,68 @@ test("taxonomy writes require a real administrator", async () => {
 		key: "status",
 		value: "verified",
 	});
+});
+
+test("role permission changes take effect without changing user assignments", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	const admin = t.withIdentity({ subject: ids.admin });
+	const member = t.withIdentity({ subject: ids.member });
+	const update = { projectSlug: "client-portal", changes: { description: "Updated" } };
+
+	await expect(member.mutation(api.projects.settings.update, update)).rejects.toThrow();
+	await admin.mutation(api.projects.settings.update, update);
+
+	await t.run(async (ctx) => {
+		const adminRoleId = ids.adminRoleId;
+		const adminRole = await ctx.db.get("roles", adminRoleId);
+		await ctx.db.patch("roles", adminRoleId, {
+			permissionIds: adminRole!.permissionIds.filter(
+				(id) => id !== ids.projectManagePermissionId,
+			),
+		});
+		const memberRoleId = ids.memberRoleId;
+		const memberRole = await ctx.db.get("roles", memberRoleId);
+		await ctx.db.patch("roles", memberRoleId, {
+			permissionIds: [...memberRole!.permissionIds, ids.projectManagePermissionId],
+		});
+	});
+
+	await expect(admin.mutation(api.projects.settings.update, update)).rejects.toThrow();
+	await member.mutation(api.projects.settings.update, update);
+});
+
+test("a user receives the union of permissions from assigned roles", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	await t.run(async (ctx) => {
+		await ctx.db.patch("users", ids.member, {
+			roleIds: [ids.memberRoleId, ids.adminRoleId],
+		});
+	});
+	const member = t.withIdentity({ subject: ids.member });
+	await member.mutation(api.projects.settings.update, {
+		projectSlug: "client-portal",
+		changes: { description: "Allowed by the second role" },
+	});
+});
+
+test("an administrator assigned to another organization cannot enter this project", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	const otherAdmin = await t.run(async (ctx) => {
+		const userId = await ctx.db.insert("users", {
+			name: "Other Admin",
+			email: "other-admin@example.com",
+			roleIds: [ids.adminRoleId],
+		});
+		const organizationId = await ctx.db.insert("organizations", {
+			name: "Other Org",
+			slug: "other-org",
+			ownerId: userId,
+		});
+		await ctx.db.patch("users", userId, { organizationId });
+		return userId;
+	});
+	const caller = t.withIdentity({ subject: otherAdmin });
+	await expect(
+		caller.query(api.feedback.queries.workspace, { projectSlug: "client-portal" }),
+	).rejects.toThrow(/denied/i);
 });

@@ -1,6 +1,8 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { internalMutation, query } from "../_generated/server";
+import { resolveUserAccess } from "../access/roles";
+import { requireCapability } from "../feedback/access";
 import { ensureTaxonomies, getTaxonomies, taxonomiesValidator } from "./lib";
 import schema from "../schema";
 
@@ -12,6 +14,10 @@ export const list = query({
 		// anonymous callers get nothing.
 		const userId = await getAuthUserId(ctx);
 		if (!userId) throw new ConvexError("Sign in to access this workspace.");
+		const access = await resolveUserAccess(ctx, userId);
+		if (!access?.user.organizationId)
+			throw new ConvexError("Workspace access denied.");
+		requireCapability(access.permissions, "project.view");
 		return await ctx.db.query("taxonomies").withIndex("by_key").collect();
 	},
 });

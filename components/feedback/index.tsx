@@ -35,6 +35,7 @@ function FeedbackContent({ projectSlug }: { readonly projectSlug: string }) {
 					items={items}
 					project={data.project}
 					role={data.role}
+					grantedPermissions={data.permissions}
 					assignees={assignees}
 					taxonomies={data.taxonomies}
 					now={now}

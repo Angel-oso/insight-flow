@@ -7,6 +7,18 @@ const role = v.union(
 	v.literal("manager"),
 	v.literal("member"),
 );
+const capability = v.union(
+	v.literal("feedback.view"),
+	v.literal("feedback.triage"),
+	v.literal("feedback.assign"),
+	v.literal("feedback.update"),
+	v.literal("feedback.comment"),
+	v.literal("project.view"),
+	v.literal("project.manage"),
+	v.literal("team.view"),
+	v.literal("team.manage"),
+	v.literal("organization.manage"),
+);
 // Feedback category/priority/status are free strings validated against the
 // taxonomies table at write time, so workspaces can define their own values.
 // The unions below document the seeded defaults only.
@@ -17,19 +29,23 @@ export default defineSchema({
 	// flows create the row before the profile is complete, so readers must
 	// fall back on missing name/email instead of assuming them.
 	...authTables,
+	users: defineTable({
+		...authTables.users.validator.fields,
+		organizationId: v.optional(v.id("organizations")),
+		roleIds: v.optional(v.array(v.id("roles"))),
+	})
+		.index("email", ["email"])
+		.index("phone", ["phone"]),
 	organizations: defineTable({
 		name: v.string(),
 		slug: v.string(),
 		ownerId: v.id("users"),
 	}).index("by_slug", ["slug"]),
-	memberships: defineTable({
-		organizationId: v.id("organizations"),
-		userId: v.id("users"),
-		role,
-		joinedAt: v.number(),
-	})
-		.index("by_organizationId_userId", ["organizationId", "userId"])
-		.index("by_userId", ["userId"]),
+	permissions: defineTable({ key: capability }).index("by_key", ["key"]),
+	roles: defineTable({
+		name: role,
+		permissionIds: v.array(v.id("permissions")),
+	}).index("by_name", ["name"]),
 	projects: defineTable({
 		organizationId: v.id("organizations"),
 		name: v.string(),
@@ -51,10 +67,11 @@ export default defineSchema({
 		.index("by_organizationId", ["organizationId"]),
 	projectMembers: defineTable({
 		projectId: v.id("projects"),
-		membershipId: v.id("memberships"),
+		userId: v.id("users"),
+		joinedAt: v.number(),
 	})
-		.index("by_projectId_membershipId", ["projectId", "membershipId"])
-		.index("by_membershipId", ["membershipId"]),
+		.index("by_projectId_userId", ["projectId", "userId"])
+		.index("by_userId", ["userId"]),
 	feedback: defineTable({
 		projectId: v.id("projects"),
 		title: v.string(),

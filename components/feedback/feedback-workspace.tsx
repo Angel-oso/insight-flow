@@ -2,7 +2,7 @@
 
 import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useMemo, useState } from "react";
-import { hasCapability, type Role } from "@/lib/auth/permissions";
+import { hasCapability, type Capability, type Role } from "@/lib/auth/permissions";
 import type { Project } from "@/lib/projects";
 import {
 	finalStatusValues,
@@ -32,6 +32,7 @@ export function FeedbackWorkspace({
 	archived,
 	project,
 	role,
+	grantedPermissions,
 }: {
 	readonly items: readonly FeedbackItem[];
 	readonly assignees: readonly Assignee[];
@@ -40,6 +41,7 @@ export function FeedbackWorkspace({
 	readonly archived: boolean;
 	readonly project: Project;
 	readonly role: Role;
+	readonly grantedPermissions: readonly Capability[];
 }) {
 	const roleLabel =
 		role === "admin" ? "Admin" : role === "manager" ? "Manager" : "Member";
@@ -47,11 +49,14 @@ export function FeedbackWorkspace({
 		project.slug,
 	);
 	const permissions: FeedbackPermissions = {
-		canTriage: !archived && !pending && hasCapability(role, "feedback.triage"),
-		canAssign: !archived && !pending && hasCapability(role, "feedback.assign"),
-		canUpdate: !archived && !pending && hasCapability(role, "feedback.update"),
+		canTriage:
+			!archived && !pending && hasCapability(grantedPermissions, "feedback.triage"),
+		canAssign:
+			!archived && !pending && hasCapability(grantedPermissions, "feedback.assign"),
+		canUpdate:
+			!archived && !pending && hasCapability(grantedPermissions, "feedback.update"),
 		canComment:
-			!archived && !pending && hasCapability(role, "feedback.comment"),
+			!archived && !pending && hasCapability(grantedPermissions, "feedback.comment"),
 	};
 	const [filters, setFilters] = useState<FeedbackFiltersState>(defaultFilters);
 	const [selectedId, setSelectedId] = useQueryState("feedback", parseAsString);

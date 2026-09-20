@@ -1,15 +1,18 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError } from "convex/values";
 import { hasCapability, type Capability } from "../../lib/auth/permissions";
+import { resolveUserAccess } from "../access/roles";
 import type { Id } from "../_generated/dataModel";
-import type { QueryCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 
 /**
  * Verified caller identity. The user id always comes from the Convex Auth
  * session — never from a client-supplied argument — so a caller cannot
  * impersonate another member by passing their id.
  */
-export async function requireUserId(ctx: QueryCtx): Promise<Id<"users">> {
+export async function requireUserId(
+	ctx: QueryCtx | MutationCtx,
+): Promise<Id<"users">> {
 	const userId = await getAuthUserId(ctx);
 	if (!userId) throw new ConvexError("Sign in to access this workspace.");
 	return userId as Id<"users">;
@@ -17,8 +20,7 @@ export async function requireUserId(ctx: QueryCtx): Promise<Id<"users">> {
 
 /**
  * Project access for the signed-in caller: the project must exist, the
- * caller must belong to its organization, and that membership must reach
- * the project through an explicit project link.
+ * caller must belong to its organization and have the right project grant.
  */
 export async function requireProject(ctx: QueryCtx, slug: string) {
 	const userId = await requireUserId(ctx);
@@ -32,22 +34,23 @@ export async function requireProject(ctx: QueryCtx, slug: string) {
 		project.organizationId,
 	);
 	if (!organization) throw new ConvexError("Project not found.");
-	const member = await ctx.db
-		.query("memberships")
-		.withIndex("by_organizationId_userId", (q) =>
-			q.eq("organizationId", organization._id).eq("userId", userId),
-		)
-		.unique();
-	if (!member || !hasCapability(member.role, "feedback.view"))
+	const access = await resolveUserAccess(ctx, userId);
+	if (
+		!access ||
+		access.user.organizationId !== organization._id ||
+		!hasCapability(access.permissions, "project.view") ||
+		!hasCapability(access.permissions, "feedback.view")
+	)
 		throw new ConvexError("Feedback access denied.");
-	const access = await ctx.db
+	const projectLink = await ctx.db
 		.query("projectMembers")
-		.withIndex("by_projectId_membershipId", (q) =>
-			q.eq("projectId", project._id).eq("membershipId", member._id),
+		.withIndex("by_projectId_userId", (q) =>
+			q.eq("projectId", project._id).eq("userId", userId),
 		)
 		.unique();
-	if (!access) throw new ConvexError("Project access denied.");
-	return { project, member, organization };
+	if (!projectLink && !hasCapability(access.permissions, "organization.manage"))
+		throw new ConvexError("Project access denied.");
+	return { project, access, organization };
 }
 
 export async function requireFeedback(
@@ -63,10 +66,10 @@ export async function requireFeedback(
 }
 
 export function requireCapability(
-	role: Parameters<typeof hasCapability>[0],
+	permissions: Parameters<typeof hasCapability>[0],
 	capability: Capability,
 ) {
-	if (!hasCapability(role, capability))
+	if (!hasCapability(permissions, capability))
 		throw new ConvexError("You cannot make this change.");
 }
 

@@ -27,8 +27,8 @@ export const update = mutation({
 	args: { projectSlug: v.string(), changes: settingsChanges },
 	returns: v.null(),
 	handler: async (ctx, { projectSlug, changes }) => {
-		const { project, member } = await requireProject(ctx, projectSlug);
-		requireCapability(member.role, "project.manage");
+		const { project, access } = await requireProject(ctx, projectSlug);
+		requireCapability(access.permissions, "project.manage");
 		if (project.status === "Archived")
 			throw new ConvexError("Archived projects cannot be edited.");
 
@@ -93,17 +93,20 @@ export const update = mutation({
 });
 
 /**
- * The caller's role in this project, server-decided for capability UI.
+ * The caller's project grants, server-decided for capability UI.
  * Returns null for anonymous callers and non-members so the settings
  * page can hide itself exactly like a denied reader.
  */
-export const role = query({
+export const access = query({
 	args: { projectSlug: v.string() },
-	returns: v.union(schema.tables.memberships.validator.fields.role, v.null()),
+	returns: v.union(v.object({
+		role: schema.tables.roles.validator.fields.name,
+		permissions: v.array(schema.tables.permissions.validator.fields.key),
+	}), v.null()),
 	handler: async (ctx, { projectSlug }) => {
 		try {
-			const { member } = await requireProject(ctx, projectSlug);
-			return member.role;
+			const { access } = await requireProject(ctx, projectSlug);
+			return { role: access.role, permissions: access.permissions };
 		} catch {
 			return null;
 		}

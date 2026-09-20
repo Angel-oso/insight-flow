@@ -1,5 +1,7 @@
 import { ConvexError, v } from "convex/values";
+import { hasCapability } from "../../lib/auth/permissions";
 import { mutation } from "../_generated/server";
+import { resolveUserAccess } from "../access/roles";
 import { requireCapability, requireFeedback } from "./access";
 import { getFinalStatuses, getTaxonomies } from "../taxonomies/lib";
 import schema from "../schema";
@@ -16,7 +18,7 @@ export const update = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, { projectSlug, feedbackId, changes }) => {
-		const { project, member, item } = await requireFeedback(
+		const { project, access, item } = await requireFeedback(
 			ctx,
 			projectSlug,
 			feedbackId,
@@ -24,12 +26,12 @@ export const update = mutation({
 		if (project.status === "Archived")
 			throw new ConvexError("Archived projects cannot be edited.");
 		if (changes.category !== undefined || changes.priority !== undefined)
-			requireCapability(member.role, "feedback.triage");
+			requireCapability(access.permissions, "feedback.triage");
 		if (changes.assigneeId !== undefined)
-			requireCapability(member.role, "feedback.assign");
+			requireCapability(access.permissions, "feedback.assign");
 		if (changes.status !== undefined) {
-			requireCapability(member.role, "feedback.update");
-			if (member.role === "member" && item.assigneeId !== member.userId)
+			requireCapability(access.permissions, "feedback.update");
+			if (!hasCapability(access.permissions, "feedback.triage") && item.assigneeId !== access.user._id)
 				throw new ConvexError("Only the assigned member can update this item.");
 		}
 		// Values are dynamic: they must exist in the taxonomies table.
@@ -46,26 +48,21 @@ export const update = mutation({
 		}
 		let ownerName = "Unassigned";
 		if (changes.assigneeId) {
-			const assignee = await ctx.db
-				.query("memberships")
-				.withIndex("by_organizationId_userId", (q) =>
-					q
-						.eq("organizationId", project.organizationId)
-						.eq("userId", changes.assigneeId!),
+			const projectAccess = await ctx.db
+				.query("projectMembers")
+				.withIndex("by_projectId_userId", (q) =>
+					q.eq("projectId", project._id).eq("userId", changes.assigneeId!),
 				)
 				.unique();
-			const access =
-				assignee &&
-				(await ctx.db
-					.query("projectMembers")
-					.withIndex("by_projectId_membershipId", (q) =>
-						q.eq("projectId", project._id).eq("membershipId", assignee._id),
-					)
-					.unique());
-			const user = await ctx.db.get("users", changes.assigneeId);
-			if (!access || !user)
+			const assignee = await resolveUserAccess(ctx, changes.assigneeId);
+			if (
+				!projectAccess ||
+				assignee?.user.organizationId !== project.organizationId ||
+				!hasCapability(assignee.permissions, "project.view") ||
+				!hasCapability(assignee.permissions, "feedback.view")
+			)
 				throw new ConvexError("Choose an owner who belongs to this project.");
-			ownerName = user.name ?? "Former member";
+			ownerName = assignee.user.name ?? "Former member";
 		}
 		const now = Date.now();
 		let changed = false;
@@ -81,7 +78,7 @@ export const update = mutation({
 			await ctx.db.insert("activities", {
 				projectId: project._id,
 				feedbackId,
-				actorId: member.userId,
+				actorId: access.user._id,
 				type: field === "status" ? "status_changed" : "updated",
 				message:
 					field === "assigneeId"
@@ -111,12 +108,12 @@ export const addComment = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, { projectSlug, feedbackId, body }) => {
-		const { project, member } = await requireFeedback(
+		const { project, access } = await requireFeedback(
 			ctx,
 			projectSlug,
 			feedbackId,
 		);
-		requireCapability(member.role, "feedback.comment");
+		requireCapability(access.permissions, "feedback.comment");
 		if (project.status === "Archived")
 			throw new ConvexError("Archived projects cannot be edited.");
 		const text = body.trim();
@@ -125,14 +122,14 @@ export const addComment = mutation({
 		const now = Date.now();
 		await ctx.db.insert("comments", {
 			feedbackId,
-			authorId: member.userId,
+			authorId: access.user._id,
 			body: text,
 			createdAt: now,
 		});
 		await ctx.db.insert("activities", {
 			projectId: project._id,
 			feedbackId,
-			actorId: member.userId,
+			actorId: access.user._id,
 			type: "commented",
 			message: "Added an internal note",
 			createdAt: now,

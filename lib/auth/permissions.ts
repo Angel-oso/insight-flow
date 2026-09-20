@@ -17,25 +17,9 @@ export const capabilities = [
 
 export type Capability = (typeof capabilities)[number];
 
-const roleCapabilities: Record<Role, readonly Capability[]> = {
-	admin: capabilities,
-	manager: [
-		"feedback.view",
-		"feedback.triage",
-		"feedback.assign",
-		"feedback.update",
-		"feedback.comment",
-		"project.view",
-		"team.view",
-	],
-	member: [
-		"feedback.view",
-		"feedback.update",
-		"feedback.comment",
-		"project.view",
-	],
-};
-
-export function hasCapability(role: Role, capability: Capability) {
-	return roleCapabilities[role].includes(capability);
+export function hasCapability(
+	permissions: readonly Capability[],
+	capability: Capability,
+) {
+	return permissions.includes(capability);
 }

@@ -1,8 +1,8 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, type MutationCtx } from "../_generated/server";
+import { resolveUserAccess } from "../access/roles";
 import { requireCapability } from "../feedback/access";
-import type { Id } from "../_generated/dataModel";
 import {
 	checkedColor,
 	checkedLabel,
@@ -13,20 +13,16 @@ import {
 
 /**
  * Global taxonomy writes need a real administrator: the caller must be
- * authenticated and hold the admin role in at least one organization.
- * Taxonomies are shared display metadata, so any org admin may curate them.
+ * authenticated and have organization management permission.
+ * Taxonomies are shared display metadata, so an org administrator may curate them.
  */
 async function requireTaxonomyAdmin(ctx: MutationCtx) {
 	const userId = await getAuthUserId(ctx);
 	if (!userId) throw new ConvexError("Sign in to access this workspace.");
-	const adminMembership = await ctx.db
-		.query("memberships")
-		.withIndex("by_userId", (q) => q.eq("userId", userId as Id<"users">))
-		.filter((q) => q.eq(q.field("role"), "admin"))
-		.first();
-	if (!adminMembership)
+	const access = await resolveUserAccess(ctx, userId);
+	if (!access?.user.organizationId)
 		throw new ConvexError("Only a workspace administrator can do this.");
-	requireCapability(adminMembership.role, "project.manage");
+	requireCapability(access.permissions, "organization.manage");
 }
 
 export const createOption = mutation({

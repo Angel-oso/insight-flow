@@ -1,18 +1,21 @@
-import { hasCapability, type Role } from "@/lib/auth/permissions";
+"use client";
+
+import { useQuery } from "convex/react";
+import { hasCapability } from "@/lib/auth/permissions";
+import { api } from "@/convex/_generated/api";
 import type { Project } from "@/lib/projects";
 import { ProjectSettingsWorkspace } from "./project-settings-workspace";
 import { SettingsHeader } from "./settings-header";
 
 export function ProjectSettings({
 	project,
-	role,
 }: {
 	readonly project: Project;
-	readonly role: Role | null;
 }) {
-	if (!role || !hasCapability(role, "project.view")) return null;
+	const access = useQuery(api.projects.settings.access, { projectSlug: project.slug });
+	if (!access || !hasCapability(access.permissions, "project.view")) return null;
 
-	const canManage = hasCapability(role, "project.manage");
+	const canManage = hasCapability(access.permissions, "project.manage");
 
 	return (
 		<div className="mx-auto w-full max-w-[1180px] px-4 py-7 sm:px-6 sm:py-9 lg:px-8 xl:px-10 xl:py-10">

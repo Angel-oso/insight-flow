@@ -1,7 +1,8 @@
 import { v } from "convex/values";
 import { query } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { listProjectFeedback, requireProject } from "../feedback/access";
+import { resolveUserAccess } from "../access/roles";
+import { listProjectFeedback, requireCapability, requireProject } from "../feedback/access";
 import { getFinalStatuses, getPriorityRanks, getTaxonomies } from "../taxonomies/lib";
 import schema from "../schema";
 
@@ -30,7 +31,7 @@ export const get = query({
 				id: v.id("users"),
 				name: v.string(),
 				email: v.string(),
-				role: schema.tables.memberships.validator.fields.role,
+				role: schema.tables.roles.validator.fields.name,
 				projectCount: v.number(),
 				openAssigned: v.number(),
 				criticalAssigned: v.number(),
@@ -40,12 +41,13 @@ export const get = query({
 		),
 	}),
 	handler: async (ctx, { projectSlug }) => {
-		const { project } = await requireProject(ctx, projectSlug);
+		const { project, access } = await requireProject(ctx, projectSlug);
+		requireCapability(access.permissions, "team.view");
 		const projectId: Id<"projects"> = project._id;
 
 		const links = await ctx.db
 			.query("projectMembers")
-			.withIndex("by_projectId_membershipId", (q) => q.eq("projectId", projectId))
+			.withIndex("by_projectId_userId", (q) => q.eq("projectId", projectId))
 			.take(51);
 		if (links.length > 50)
 			throw new Error("This workspace supports up to 50 project members.");
@@ -71,11 +73,9 @@ export const get = query({
 
 		const members = [];
 		for (const link of links) {
-			const membership = await ctx.db.get("memberships", link.membershipId);
-			if (!membership || membership.organizationId !== project.organizationId)
-				continue;
-			const user = await ctx.db.get("users", membership.userId);
-			if (!user) continue;
+			const member = await resolveUserAccess(ctx, link.userId);
+			if (!member || member.user.organizationId !== project.organizationId) continue;
+			const user = member.user;
 			const assigned = await ctx.db
 				.query("feedback")
 				.withIndex("by_projectId_assigneeId", (q) =>
@@ -93,18 +93,23 @@ export const get = query({
 			}
 			const scope = await ctx.db
 				.query("projectMembers")
-				.withIndex("by_membershipId", (q) => q.eq("membershipId", membership._id))
+				.withIndex("by_userId", (q) => q.eq("userId", user._id))
 				.take(51);
+			let projectCount = 0;
+			for (const projectLink of scope) {
+				const linkedProject = await ctx.db.get("projects", projectLink.projectId);
+				if (linkedProject?.organizationId === project.organizationId) projectCount += 1;
+			}
 			members.push({
 				id: user._id,
 				name: user.name ?? "Unknown member",
 				email: user.email ?? "",
-				role: membership.role,
-				projectCount: scope.length,
+				role: member.role,
+				projectCount,
 				openAssigned,
 				criticalAssigned,
 				lastActivityAt,
-				joinedAt: membership.joinedAt,
+				joinedAt: link.joinedAt,
 			});
 		}
 		// Most loaded first: where work is concentrated.

@@ -1,5 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { query } from "../_generated/server";
+import { hasCapability } from "../../lib/auth/permissions";
+import { resolveUserAccess } from "../access/roles";
 import {
 	listProjectFeedback,
 	requireFeedback,
@@ -12,18 +14,19 @@ export const workspace = query({
 	args: { projectSlug: v.string() },
 	returns: v.object({
 		project: schema.doc("projects"),
-		role: schema.tables.memberships.validator.fields.role,
+		role: schema.tables.roles.validator.fields.name,
+		permissions: v.array(schema.tables.permissions.validator.fields.key),
 		items: v.array(schema.doc("feedback")),
 		assignees: v.array(schema.doc("users")),
 		taxonomies: taxonomiesValidator,
 	}),
 	handler: async (ctx, { projectSlug }) => {
-		const { project, member } = await requireProject(ctx, projectSlug);
+		const { project, access } = await requireProject(ctx, projectSlug);
 		const items = await listProjectFeedback(ctx, project._id);
 		// Keep the sample bounded without silently dropping rows or misreporting totals.
 		const links = await ctx.db
 			.query("projectMembers")
-			.withIndex("by_projectId_membershipId", (q) =>
+			.withIndex("by_projectId_userId", (q) =>
 				q.eq("projectId", project._id),
 			)
 			.take(51);
@@ -31,14 +34,22 @@ export const workspace = query({
 			throw new ConvexError("This workspace supports up to 50 project members.");
 		const assignees = [];
 		for (const link of links) {
-			const membership = await ctx.db.get("memberships", link.membershipId);
-			if (!membership || membership.organizationId !== project.organizationId)
-				continue;
-			const user = await ctx.db.get("users", membership.userId);
-			if (user) assignees.push(user);
+			const assignee = await resolveUserAccess(ctx, link.userId);
+			if (
+				assignee?.user.organizationId === project.organizationId &&
+				hasCapability(assignee.permissions, "project.view") &&
+				hasCapability(assignee.permissions, "feedback.view")
+			) assignees.push(assignee.user);
 		}
 		const taxonomies = await getTaxonomies(ctx);
-		return { project, role: member.role, items, assignees, taxonomies };
+		return {
+			project,
+			role: access.role,
+			permissions: access.permissions,
+			items,
+			assignees,
+			taxonomies,
+		};
 	},
 });
 
