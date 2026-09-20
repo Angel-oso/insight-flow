@@ -8,13 +8,17 @@
  * @module
  */
 
+import type * as access_roles from "../access/roles.js";
 import type * as auth from "../auth.js";
 import type * as dashboard_overview from "../dashboard/overview.js";
 import type * as feedback_access from "../feedback/access.js";
 import type * as feedback_mutations from "../feedback/mutations.js";
 import type * as feedback_queries from "../feedback/queries.js";
 import type * as http from "../http.js";
+import type * as projects_mutations from "../projects/mutations.js";
+import type * as projects_queries from "../projects/queries.js";
 import type * as projects_settings from "../projects/settings.js";
+import type * as setup_admin from "../setup/admin.js";
 import type * as setup_queries from "../setup/queries.js";
 import type * as taxonomies_lib from "../taxonomies/lib.js";
 import type * as taxonomies_mutations from "../taxonomies/mutations.js";
@@ -29,13 +33,17 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "access/roles": typeof access_roles;
   auth: typeof auth;
   "dashboard/overview": typeof dashboard_overview;
   "feedback/access": typeof feedback_access;
   "feedback/mutations": typeof feedback_mutations;
   "feedback/queries": typeof feedback_queries;
   http: typeof http;
+  "projects/mutations": typeof projects_mutations;
+  "projects/queries": typeof projects_queries;
   "projects/settings": typeof projects_settings;
+  "setup/admin": typeof setup_admin;
   "setup/queries": typeof setup_queries;
   "taxonomies/lib": typeof taxonomies_lib;
   "taxonomies/mutations": typeof taxonomies_mutations;

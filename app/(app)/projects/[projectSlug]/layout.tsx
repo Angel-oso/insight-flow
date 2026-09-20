@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/layout/app-shell";
+import { ProjectAccessGate } from "@/components/projects/project-access-gate";
 import { getProjectBySlug } from "@/lib/projects";
 
 export default async function ProjectLayout({
@@ -11,5 +12,11 @@ export default async function ProjectLayout({
 	const { projectSlug } = await params;
 	const project = getProjectBySlug(projectSlug);
 
-	return <AppShell project={project}>{children}</AppShell>;
+	return (
+		<AppShell project={project}>
+			<ProjectAccessGate projectSlug={projectSlug}>
+				{children}
+			</ProjectAccessGate>
+		</AppShell>
+	);
 }

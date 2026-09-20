@@ -1,8 +1,10 @@
 "use client";
 
 import { Check, ChevronsUpDown, FolderKanban, Plus } from "lucide-react";
+import { ConvexError } from "convex/values";
+import { useMutation, useQuery } from "convex/react";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -24,9 +26,8 @@ import {
 	SheetTitle,
 } from "@/components/ui/sheet";
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
-import { type Project, projectPath, projects } from "@/lib/projects";
-
-const customProjectsStorageKey = "insightflow-custom-projects";
+import { api } from "@/convex/_generated/api";
+import { type Project, projectPath } from "@/lib/projects";
 
 function normalizeProjectName(value: string) {
 	return value.trim().replace(/\s+/g, " ");
@@ -51,60 +52,48 @@ function getCurrentSection(pathname: string) {
 export function ProjectSwitcher({ project }: { readonly project: Project }) {
 	const pathname = usePathname();
 	const router = useRouter();
-	const [customProjects, setCustomProjects] = useState<Project[]>(() => {
-		if (typeof window === "undefined") return [];
-
-		try {
-			return JSON.parse(
-				window.localStorage.getItem(customProjectsStorageKey) ?? "[]",
-			) as Project[];
-		} catch {
-			window.localStorage.removeItem(customProjectsStorageKey);
-			return [];
-		}
-	});
+	const projects = useQuery(api.projects.queries.list, {});
+	const create = useMutation(api.projects.mutations.create);
 	const [isCreateOpen, setIsCreateOpen] = useState(false);
 	const [projectName, setProjectName] = useState("");
 	const [description, setDescription] = useState("");
+	const [createError, setCreateError] = useState<string | null>(null);
+	const [isCreating, setIsCreating] = useState(false);
 	const section = getCurrentSection(pathname);
 
 	const availableProjects = useMemo(() => {
-		const allProjects = [...projects, ...customProjects];
+		const allProjects = projects ?? [];
 		return allProjects.some((candidate) => candidate.slug === project.slug)
 			? allProjects
 			: [...allProjects, project];
-	}, [customProjects, project]);
+	}, [project, projects]);
 
 	const selectProject = (projectSlug: string) => {
 		router.push(projectPath(projectSlug, section));
 	};
 
-	const createProject = (event: React.FormEvent<HTMLFormElement>) => {
+	const createProject = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		const name = normalizeProjectName(projectName);
-		const slug = slugify(name);
-		if (!name || !slug) return;
+		if (!name || !slugify(name)) return;
 
-		const newProject = {
-			slug,
-			name,
-			description:
-				normalizeProjectName(description) || "New project workspace.",
-		};
-		const nextProjects = [
-			...customProjects.filter((candidate) => candidate.slug !== slug),
-			newProject,
-		];
-
-		setCustomProjects(nextProjects);
-		window.localStorage.setItem(
-			customProjectsStorageKey,
-			JSON.stringify(nextProjects),
-		);
-		setIsCreateOpen(false);
-		setProjectName("");
-		setDescription("");
-		selectProject(slug);
+		setIsCreating(true);
+		setCreateError(null);
+		try {
+			const project = await create({ name, description });
+			setIsCreateOpen(false);
+			setProjectName("");
+			setDescription("");
+			selectProject(project.slug);
+		} catch (cause) {
+			setCreateError(
+				cause instanceof ConvexError
+					? cause.message
+					: "Could not create the project. Try again.",
+			);
+		} finally {
+			setIsCreating(false);
+		}
 	};
 
 	return (
@@ -216,9 +205,16 @@ export function ProjectSwitcher({ project }: { readonly project: Project }) {
 									placeholder="What is this project for?"
 								/>
 							</label>
+							{createError ? (
+								<p role="alert" className="text-sm text-destructive">
+									{createError}
+								</p>
+							) : null}
 						</div>
 						<SheetFooter>
-							<Button type="submit">Create and open project</Button>
+							<Button type="submit" disabled={isCreating}>
+								{isCreating ? "Creating project…" : "Create and open project"}
+							</Button>
 						</SheetFooter>
 					</form>
 				</SheetContent>
