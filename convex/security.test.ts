@@ -45,30 +45,36 @@ async function seedTestWorkspace() {
 		const admin = await ctx.db.insert("users", {
 			name: "Ada Admin",
 			email: "admin@example.com",
-			roleIds: [roleIds.get("admin")!],
 		});
 		const manager = await ctx.db.insert("users", {
 			name: "Moe Manager",
 			email: "manager@example.com",
-			roleIds: [roleIds.get("manager")!],
 		});
 		const member = await ctx.db.insert("users", {
 			name: "Dan Member",
 			email: "member@example.com",
-			roleIds: [roleIds.get("member")!],
 		});
 		const academy = await ctx.db.insert("users", {
 			name: "Em Academy",
 			email: "academy@example.com",
-			roleIds: [roleIds.get("member")!],
 		});
 		const organizationId = await ctx.db.insert("organizations", {
 			name: "Test Org",
 			slug: "test-org",
 			ownerId: admin,
 		});
-		for (const userId of [admin, manager, member, academy]) {
-			await ctx.db.patch("users", userId, { organizationId });
+		// Organization membership is the only source of base role grants.
+		for (const [userId, role] of [
+			[admin, "admin"],
+			[manager, "manager"],
+			[member, "member"],
+			[academy, "member"],
+		] as const) {
+			await ctx.db.insert("organizationMembers", {
+				organizationId,
+				userId,
+				roleIds: [roleIds.get(role)!],
+			});
 		}
 		const portal = await ctx.db.insert("projects", {
 			organizationId,
@@ -668,7 +674,11 @@ test("role permission changes take effect without changing user assignments", as
 test("a user receives the union of permissions from assigned roles", async () => {
 	const { t, ids } = await seedTestWorkspace();
 	await t.run(async (ctx) => {
-		await ctx.db.patch("users", ids.member, {
+		const membership = await ctx.db
+			.query("organizationMembers")
+			.withIndex("by_userId", (q) => q.eq("userId", ids.member))
+			.unique();
+		await ctx.db.patch("organizationMembers", membership!._id, {
 			roleIds: [ids.memberRoleId, ids.adminRoleId],
 		});
 	});
@@ -1027,4 +1037,65 @@ test("team managers cannot grant or remove more access than they hold", async ()
 		expiresInHours: 1,
 	});
 	expect(invitation.token).toHaveLength(32);
+});
+
+test("legacy user fields never grant access without an organization membership", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	const legacyId = await t.run(async (ctx) => {
+		const project = await ctx.db
+			.query("projects")
+			.withIndex("by_slug", (q) => q.eq("slug", "client-portal"))
+			.unique();
+		const userId = await ctx.db.insert("users", {
+			name: "Legacy Admin",
+			email: "legacy@example.com",
+			organizationId: project!.organizationId,
+			roleIds: [ids.adminRoleId],
+		});
+		await ctx.db.insert("projectMembers", {
+			projectId: project!._id,
+			userId,
+			joinedAt: Date.now(),
+		});
+		return userId;
+	});
+	const legacy = t.withIdentity({ subject: legacyId });
+	await expect(
+		legacy.query(api.feedback.queries.workspace, { projectSlug: "client-portal" }),
+	).rejects.toThrow("Feedback access denied.");
+	await expect(legacy.query(api.projects.queries.list, {})).resolves.toEqual([]);
+	await expect(legacy.query(api.setup.queries.status, {})).resolves.toMatchObject({
+		hasMembership: false,
+	});
+});
+
+test("the legacy membership backfill restores access exactly once", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	const legacyId = await t.run(async (ctx) => {
+		const project = await ctx.db
+			.query("projects")
+			.withIndex("by_slug", (q) => q.eq("slug", "client-portal"))
+			.unique();
+		const userId = await ctx.db.insert("users", {
+			name: "Legacy Member",
+			organizationId: project!.organizationId,
+			roleIds: [ids.memberRoleId],
+		});
+		await ctx.db.insert("projectMembers", { projectId: project!._id, userId, joinedAt: 0 });
+		return userId;
+	});
+	const legacy = t.withIdentity({ subject: legacyId });
+	await expect(
+		legacy.query(api.feedback.queries.workspace, { projectSlug: "client-portal" }),
+	).rejects.toThrow();
+
+	const first = await t.mutation(internal.setup.admin.migrateLegacyMemberships, { cursor: null });
+	expect(first).toMatchObject({ migrated: 1, isDone: true });
+	const second = await t.mutation(internal.setup.admin.migrateLegacyMemberships, { cursor: null });
+	expect(second.migrated).toBe(0);
+
+	const workspace = await legacy.query(api.feedback.queries.workspace, {
+		projectSlug: "client-portal",
+	});
+	expect(workspace.role).toBe("member");
 });

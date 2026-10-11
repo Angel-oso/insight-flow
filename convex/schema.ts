@@ -20,8 +20,9 @@ const capability = v.union(
 
 export default defineSchema({
 	// Convex Auth tables (users, sessions, accounts, verifiers, rate
-	// limits). `organizationId` and `roleIds` are legacy fallbacks while
-	// organizationMembers becomes the source of truth for multi-workspace access.
+	// limits). `organizationId` and `roleIds` are legacy fields kept only so old
+	// documents validate; they grant nothing. organizationMembers is the source
+	// of truth (backfill with setup/admin:migrateLegacyMemberships).
 	...authTables,
 	users: defineTable({
 		...authTables.users.validator.fields,

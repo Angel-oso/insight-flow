@@ -53,6 +53,11 @@ de la invitación.
 Tope de permisos: nadie puede invitar con un rol que tenga más permisos que
 los suyos, ni quitar del proyecto a alguien con más permisos que él.
 
+Los campos `users.organizationId` y `users.roleIds` son legacy y no conceden
+acceso. Si una base de datos tiene usuarios creados con ellos, ejecuta una vez
+`npx convex run setup/admin:migrateLegacyMemberships '{"cursor": null}'`
+(repite con `continueCursor` hasta que `isDone` sea verdadero).
+
 ## Tests
 
 `pnpm test` ejecuta las suites en memoria (convex-test, sin red):

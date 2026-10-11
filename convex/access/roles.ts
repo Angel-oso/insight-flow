@@ -8,63 +8,70 @@ const roleRank: Record<Role, number> = {
 	member: 1,
 };
 
-/** Resolve one organization membership; legacy user fields remain during migration. */
+type ResolvedAccess = {
+	user: Doc<"users">;
+	roleId: Id<"roles">;
+	role: string;
+	permissions: Capability[];
+};
+
+async function organizationMembership(
+	ctx: QueryCtx | MutationCtx,
+	userId: Id<"users">,
+	organizationId: Id<"organizations">,
+) {
+	return ctx.db
+		.query("organizationMembers")
+		.withIndex("by_organizationId_userId", (q) =>
+			q.eq("organizationId", organizationId).eq("userId", userId),
+		)
+		.unique();
+}
+
+/**
+ * Organization access comes only from `organizationMembers`. The legacy
+ * `users.organizationId` / `users.roleIds` fields never grant anything.
+ */
 export async function resolveOrganizationAccess(
 	ctx: QueryCtx | MutationCtx,
 	userId: Id<"users">,
 	organizationId: Id<"organizations">,
-): Promise<{
-	user: Doc<"users">;
-	roleId: Id<"roles">;
-	role: string;
-	permissions: Capability[];
-} | null> {
+): Promise<ResolvedAccess | null> {
 	const [user, organization, membership] = await Promise.all([
 		ctx.db.get("users", userId),
 		ctx.db.get("organizations", organizationId),
-		ctx.db
-			.query("organizationMembers")
-			.withIndex("by_organizationId_userId", (q) =>
-				q.eq("organizationId", organizationId).eq("userId", userId),
-			)
-			.unique(),
+		organizationMembership(ctx, userId, organizationId),
 	]);
-	if (!user || !organization) return null;
-	const roleIds = membership?.roleIds ??
-		(user.organizationId === organizationId ? user.roleIds ?? [] : []);
-	return resolveRoleAccess(ctx, user, roleIds);
+	if (!user || !organization || !membership) return null;
+	return resolveRoleAccess(ctx, user, membership.roleIds);
 }
 
-/** Resolve role grants for one project membership, falling back for legacy links. */
+/**
+ * Project access needs both a project link and an organization membership.
+ * The link's pinned role wins; unpinned links inherit the membership roles.
+ */
 export async function resolveProjectAccess(
 	ctx: QueryCtx | MutationCtx,
 	userId: Id<"users">,
 	projectId: Id<"projects">,
-): Promise<{
-	user: Doc<"users">;
-	roleId: Id<"roles">;
-	role: string;
-	permissions: Capability[];
-} | null> {
+): Promise<ResolvedAccess | null> {
 	const project = await ctx.db.get("projects", projectId);
 	if (!project) return null;
-	const link = await ctx.db
-		.query("projectMembers")
-		.withIndex("by_projectId_userId", (q) =>
-			q.eq("projectId", projectId).eq("userId", userId),
-		)
-		.unique();
-	if (!link) return null;
-	const organizationAccess = await resolveOrganizationAccess(
-		ctx,
-		userId,
-		project.organizationId,
-	);
-	if (!organizationAccess) return null;
+	const [user, link, membership] = await Promise.all([
+		ctx.db.get("users", userId),
+		ctx.db
+			.query("projectMembers")
+			.withIndex("by_projectId_userId", (q) =>
+				q.eq("projectId", projectId).eq("userId", userId),
+			)
+			.unique(),
+		organizationMembership(ctx, userId, project.organizationId),
+	]);
+	if (!user || !link || !membership) return null;
 	return resolveRoleAccess(
 		ctx,
-		organizationAccess.user,
-		link.roleId ? [link.roleId] : organizationAccess.user.roleIds ?? [],
+		user,
+		link.roleId ? [link.roleId] : membership.roleIds,
 		projectId,
 	);
 }
@@ -74,12 +81,7 @@ async function resolveRoleAccess(
 	user: Doc<"users">,
 	roleIds: readonly Id<"roles">[],
  	projectId?: Id<"projects">,
-): Promise<{
-	user: Doc<"users">;
-	roleId: Id<"roles">;
-	role: string;
-	permissions: Capability[];
-} | null> {
+): Promise<ResolvedAccess | null> {
 	if (!roleIds.length) return null;
 	const permissions = new Set<Capability>();
 	let role: string | null = null;
