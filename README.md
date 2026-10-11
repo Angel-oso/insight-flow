@@ -211,7 +211,7 @@ roles ── permissions   (built-in admin/manager/member + per-project custom r
 | Owner | An admin who can also transfer organization ownership |
 | Admin | Everything: triage, assign, log, manage project, team, roles, taxonomies, organization |
 | Manager | Triage, assign, update, comment, and log feedback |
-| Member | Comment and update the status of feedback assigned to them |
+| Member | Comment and update the status of feedback assigned to them; see the team roster without per-person workload |
 | Custom | Any combination, defined per project in settings |
 
 Capabilities live in `lib/auth/permissions.ts` and are enforced in the backend

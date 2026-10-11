@@ -54,7 +54,8 @@ deriva la caducidad de `expiresAt`.
 Las métricas de organización solo llegan a quien tiene `organization.manage`
 en su membresía de organización; el resto recibe únicamente sus proyectos. La
 carga por persona del overview de proyecto solo llega a quien tiene
-`feedback.assign`. Un proyecto archivado rechaza cambios de equipo, roles e
+`feedback.assign`, igual que la carga por persona de `team.queries.get` (el
+resto ve el equipo sin comparaciones). Un proyecto archivado rechaza cambios de equipo, roles e
 invitaciones hasta que se restaura.
 
 Tope de permisos: nadie puede invitar con un rol que tenga más permisos que
