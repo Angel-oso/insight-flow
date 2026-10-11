@@ -22,54 +22,75 @@ failures:
 
 InsightFlow provides **one workflow**: collect via a public link, organize by
 project, assign owners, move each item through a clear lifecycle, and see
-volume, urgency, and health in a dashboard. Deliberately **simple before smart**:
-manual classification and prioritization first; no AI, automations, or scoring
-in the MVP.
+volume, urgency, and health in a dashboard. Deliberately **simple before
+smart**: manual classification and prioritization; no AI, automations, or
+scoring.
 
 ---
 
-## What's included
+## The workflow, end to end
 
-| Page | Route | Data status |
+1. **Sign up** (email/password or Google) and create a workspace. You become
+   its owner and administrator, and its first project is created for you.
+2. **Share the public link** from *Project settings → Feedback intake*
+   (`/f/<project>`). Anyone can submit feedback without an account.
+3. **Triage in the inbox**: search and filter, set category and priority,
+   assign an owner, move the status, and leave internal notes. Feedback that
+   arrives by phone or email can be logged manually by triagers.
+4. **Decide on the overview**: received vs. resolved trend, backlog
+   composition, the items needing intervention, and the project's health over
+   the last 7, 30, or 90 days.
+5. **Grow the team**: invite people with a one-time, expiring link and a
+   project role, change roles, or remove members (their open work returns to
+   the unassigned queue).
+
+---
+
+## Routes
+
+| Route | Audience | What it does |
 | --- | --- | --- |
-| Project overview | `/projects/[slug]/home` | Real Convex backend |
-| Feedback queue | `/projects/[slug]/feedback` | Real Convex backend |
-| Team | `/projects/[slug]/team` | Local demo data |
-| Project settings | `/projects/[slug]/settings` | Local (localStorage) |
+| `/` | Public | Landing page |
+| `/login`, `/signup` | Public | Authentication |
+| `/f/[projectSlug]` | Public | Feedback form and confirmation |
+| `/invitations/[token]` | Signed in | Accept a project invitation |
+| `/home`, `/feedback`, `/team` | Signed in | Open your first project's section |
+| `/projects/[slug]/home` | Members | Decision-ready project overview |
+| `/projects/[slug]/feedback` | Members | Inbox: queue, detail, triage, notes |
+| `/projects/[slug]/team` | Members | Workload, roles, invitations |
+| `/projects/[slug]/settings` | Members | Identity, intake link, taxonomies, roles, archive |
+
+Every page reads live data from the Convex backend; nothing is mocked.
 
 ### Overview (`home`)
 
-A decision-ready view: intervention brief, metric band (received, open,
-critical, resolution), project health, feedback movement (received vs. resolved
-per day), backlog composition, a "Needs intervention" queue with deep-links to
-each item, and recent activity. Everything is computed in the backend with a
-single transactional query (`api.overview.get`).
+Intervention brief, metric band (received, open, critical, resolution),
+feedback movement (received vs. resolved per day), backlog composition, a
+"Needs intervention" queue with deep links, and recent activity. Computed in
+one transactional query (`dashboard/overview:get`) for the selected range.
 
-### Feedback (`feedback`)
+### Inbox (`feedback`)
 
-A filterable queue with search, filters by status/priority/category/date,
-pagination, and expandable rows: opening an item loads its comments and history,
-and the selection lives in the URL (`?feedback=<id>`), so it's shareable and
-works with back/forward. Real mutations for triage, assignment, status changes,
-and comments, each producing its activity entry.
+Search, filters by status/priority/category/date and "Assigned to me",
+pagination, and expandable rows. The selected item lives in the URL
+(`?feedback=<id>`), so it's shareable and works with back/forward. Every
+triage change and note writes an activity entry.
 
-### Database-driven taxonomies
+### Public intake (`/f/[slug]`)
 
-Statuses, categories, and priorities are not hardcoded: they live in the
-`taxonomies` table as JSON docs (`value`, `label`, `rank`, `color`, `isFinal`,
-`tone`, `description`). Every surface (filters, badges, donut, settings)
-reads text, level, and color from the database. The project settings page lets
-admins rename options, pick colors with the native color input, set ranks, mark
-final states, and create or remove options (removal is blocked while feedback
-still uses a value). Changes apply everywhere instantly with no deploy.
+Title, description, category, and optional name and email. Validated on the
+server; closed when the project is paused, archived, or its intake is turned
+off. New items start in the first status with the project's default priority,
+unassigned. A hidden honeypot field absorbs simple bots.
 
-Two architectural rules keep dynamic values safe:
+### Organization taxonomies
 
-- The schema stores plain strings; every write validates values against the
-  taxonomy docs, and `value` slugs never change once created.
-- Business rules derive from data, not literals: final statuses close the
-  backlog, the top priority rank defines the critical lane, and the lowest
-  status rank is the triage lane.
+Statuses, categories, and priorities live in the `taxonomies` table, one set
+per organization. Administrators rename options, pick colors, set ranks, mark
+final statuses, and add or remove options (removal is blocked while the
+organization's feedback still uses a value). Business rules derive from the
+data: final statuses close the backlog, the top priority rank is the critical
+lane, and the lowest status rank is where new feedback lands.
 
 ---
 
@@ -79,49 +100,55 @@ Two architectural rules keep dynamic values safe:
 | --- | --- |
 | Frontend | Next.js 16 (App Router), React 19, TypeScript |
 | Backend | Convex (database, queries, mutations, realtime) |
+| Auth | Convex Auth (Google OAuth + email/password) |
 | UI | Tailwind CSS 4, shadcn/ui, Base UI, Lucide |
-| Charts | Tanstack Charts |
+| Charts | TanStack Charts |
 | URL state | nuqs |
-| Fonts | Inter (UI) + Manrope (display) |
+| Tests | Vitest + convex-test |
 
 ---
 
 ## Architecture
 
 ```text
-app/(app)/projects/[projectSlug]/
-├── home/page.tsx        →  Dashboard (overview)
-├── feedback/page.tsx    →  Feedback (queue + detail)
-├── team/page.tsx        →  Team (local demo)
-└── settings/page.tsx    →  Settings (local demo)
+app/
+├── page.tsx                       → landing
+├── (auth)/login, signup           → authentication
+├── f/[projectSlug]/               → public feedback form
+├── invitations/[token]/           → accept an invitation
+└── (app)/projects/[projectSlug]/  → home · feedback · team · settings
 
 components/
-├── home/dashboard/      →  panels + model.ts (presentation) + use-overview.ts
-├── feedback/            →  workspace, accordion list, detail, filters, model.ts
-├── project-settings/    →  settings (reads taxonomies via useTaxonomies)
-└── ui/                  →  shadcn/ui
+├── landing/  intake/  invitations/
+├── home/dashboard/   → overview panels + presentation model
+├── feedback/         → inbox, detail, filters, manual logging
+├── team/             → roster, workload, invitations
+├── project-settings/ → settings, public link, taxonomies, roles
+└── projects/         → access gate + current-project context
 
 convex/
-├── schema.ts            →  9 tables + indexes
-├── feedback.ts          →  workspace, detail, update, addComment
-├── overview.ts          →  get (dashboard aggregates)
-├── taxonomies.ts        →  list, ensureDefaults + helpers
-├── feedback/access.ts   →  requireProject/requireFeedback + bounded listings
-└── seed.ts              →  idempotent demo data (Acme Studio)
-
-lib/
-├── projects.ts          →  demo project catalog
-├── taxonomy.ts          →  types, tone→class map, useTaxonomies hook
-└── auth/permissions.ts  →  roles (admin/manager/member) and capabilities
+├── schema.ts         → tables and indexes
+├── access/roles.ts   → organization and project role resolution
+├── feedback/         → access helpers, queries, mutations, shared creation
+├── intake/public.ts  → anonymous form read + submission
+├── dashboard/        → overview aggregates
+├── projects/         → list, create, settings, roles, restore
+├── team/             → roster, role changes, member removal
+├── invitations/      → expiring one-time invitation links
+├── taxonomies/       → per-organization display metadata
+├── setup/            → workspace creation, access catalog
+└── users/            → profile and account credentials
 ```
 
-**Conventions enforced across the backend:**
+**Backend conventions:**
 
-- Index-driven reads (`withIndex`), never `filter()` as a WHERE clause.
-- Bounded collections (`take(n)`); the workspace caps at 200 items per project.
-- No wall-clock in queries: `now` comes in as an argument, refreshed by the
-  client every 60 seconds.
-- `args` + `returns` validators on every function (object form).
+- Identity always comes from the auth session (`getAuthUserId`), never from
+  arguments. Every read and write checks project membership and the role's
+  capabilities on the server.
+- Index-driven reads (`withIndex`), bounded collections (`take(n)`) with
+  explicit errors instead of silent truncation.
+- No wall-clock in queries: `now` comes in as an argument from the client.
+- `args` + `returns` validators on every function.
 - No stored counters: metrics, age, and relative times are derived.
 
 ---
@@ -129,21 +156,37 @@ lib/
 ## Data model
 
 ```text
-organizations ── users (assigned role IDs) ── projectMembers ── projects
-                    │                                           │
-                    └─ roles ── permissions                    └─ feedback ─┬─ comments
-                                                                            └─ activities
+organizations ─┬─ organizationMembers ── users
+               ├─ projects ─┬─ projectMembers (user + role)
+               │            ├─ projectInvitations
+               │            └─ feedback ─┬─ comments
+               │                         └─ activities
+               └─ taxonomies (status · category · priority)
 
-taxonomies (global): status · category · priority  →  JSON display metadata
+roles ── permissions   (built-in admin/manager/member + per-project custom roles)
 ```
 
 **Transparent business rules** (same in backend and UI):
 
-- **Open**: anything not `Completed` or `Discarded`.
+- **Open**: any status not marked final (by default `Completed`, `Discarded`).
 - **Stale**: open with no activity for ≥ 7 days.
-- **Needs attention**: open + (Critical, High, unassigned, or stale).
-- **Health**: `At risk` (≥ 1 open critical) · `Needs attention` (backlog with
-  no criticals) · `Healthy` (zero open).
+- **Needs attention**: open and top priority, unassigned, or stale.
+- **Health**: `At risk` (≥ 1 open critical) · `Needs attention` (open backlog,
+  no criticals) · `Healthy` (nothing open).
+
+---
+
+## Roles and permissions
+
+| Role | Can |
+| --- | --- |
+| Admin | Everything: triage, assign, log, manage project, team, roles, taxonomies |
+| Manager | Triage, assign, update, comment, and log feedback |
+| Member | Comment and update the status of feedback assigned to them |
+| Custom | Any combination, defined per project in settings |
+
+Capabilities live in `lib/auth/permissions.ts` and are enforced in the backend
+(`requireCapability`), never only in the UI.
 
 ---
 
@@ -153,39 +196,26 @@ Requirements: Node 20+ and `pnpm`.
 
 ```bash
 pnpm install
+cp .env.example .env.local
 ```
 
-The app needs **two** processes: Next.js and Convex (the latter pushes schema
-and functions to the `.env.local` deployment).
+The app needs **two** processes:
 
 ```bash
-# Terminal 1 — backend (watch + codegen on every change)
+# Terminal 1: backend (watch + codegen)
 npx convex dev
 
-# Terminal 2 — frontend
+# Terminal 2: frontend
 pnpm dev
 ```
 
-Open `http://localhost:3000/projects/academy/home`.
+Configure auth once on the deployment (see `.env.example` for details):
+`JWT_PRIVATE_KEY`, `JWKS`, `SITE_URL`, and optionally `AUTH_GOOGLE_ID` /
+`AUTH_GOOGLE_SECRET` for Google sign-in.
 
-### Seeding the demo
-
-The seed is idempotent (re-running it preserves your edits). Since `seed:run`
-is internal, run it from the Convex dashboard (**Functions → seed:run**) or via
-the CLI if you expose it. It creates:
-
-- Org `Acme Studio (Demo)` + 5 users with roles + 3 projects.
-- 18 feedback items covering all 6 statuses, 5 categories, and unassigned cases.
-- The 3 taxonomies (`status`, `category`, `priority`).
-- Sample comments and activities.
-
-Required variables live in `.env.local`:
-
-```bash
-CONVEX_DEPLOYMENT=...
-NEXT_PUBLIC_CONVEX_URL=...
-NEXT_PUBLIC_CONVEX_SITE_URL=...
-```
+Open `http://localhost:3000`, create an account, and create your workspace.
+Open *Project settings*, copy the public link, and submit some feedback to
+see it arrive in the inbox and the overview.
 
 ### Scripts
 
@@ -194,39 +224,21 @@ NEXT_PUBLIC_CONVEX_SITE_URL=...
 | `pnpm dev` | Next.js dev server |
 | `pnpm build` / `pnpm start` | Production build and server |
 | `pnpm lint` | ESLint |
-| `npx tsc --noEmit` | Typecheck (catches most issues before deploy) |
+| `pnpm test` | Backend authorization and intake suites (Vitest + convex-test) |
+| `npx tsc --noEmit` | Typecheck |
 | `npx convex dev` | Backend watch + codegen |
-| `npx convex run taxonomies:ensureDefaults` | Re-seed taxonomies (requires exposing it) |
 
 ---
 
-## Roles and permissions
+## Deliberately out of scope
 
-| Role | Can |
-| --- | --- |
-| Admin | Everything: triage, assign, update, comment, manage |
-| Manager | Triage, assign, update, and comment (no global admin) |
-| Member | Comment and update only their assigned feedback |
-
-Capabilities live in `lib/auth/permissions.ts` and are enforced in the backend
-(`requireCapability`), never in the UI alone.
+Integrations (Slack, Jira, email), AI summaries or deduplication, public
+voting or roadmaps, billing, CSV import/export, bulk operations, and
+notifications. Inbox filtering runs client-side over a 200-item cap per
+project; moving it server-side is the natural next step as volume grows.
 
 ---
 
-## Deliberately simple decisions (and what's next)
-
-**Not included today**: real auth (shared demo identity), public intake (form
-by project slug), server-side pagination, notifications, or import/export.
-Feedback filtering and pagination run client-side over a 200-item cap; moving
-them server-side is the natural next step as volume grows.
-
-**Future**: public intake with a `submit` mutation, authentication, creating
-orgs/projects/users from the UI, an admin page for editing taxonomies (the
-architecture already allows it: only mutation + UI are missing), and aggregates
-via `@convex-dev/aggregate` if counts get expensive.
-
----
-
-*Designed and built as an end-to-end product + frontend case study: public
-intake, role-based workflows, feedback prioritization, and responsive
-decision dashboards.*
+*Designed and built as an end-to-end product + engineering case study: public
+intake, role-based workflows, feedback prioritization, and decision
+dashboards.*

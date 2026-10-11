@@ -1,143 +1,63 @@
 # InsightFlow backend
 
-Convex backend: la página de feedback consume queries para la cola, el
-detalle, los comentarios y las actividades; el resto de superficies leen
-dashboard, equipo, ajustes y taxonomías del mismo backend.
+Backend Convex de InsightFlow. Todas las superficies de la app (overview,
+bandeja de feedback, equipo, ajustes y el formulario público) leen y escriben
+aquí; no hay datos simulados ni seed.
 
-## Páginas y datos
+## Módulos
 
-| Ruta | Datos servidos |
+| Módulo | Funciones públicas |
 | --- | --- |
-| `/projects/[projectSlug]/home` | Feedback por fecha, estado, categoría, prioridad y responsable; actividad reciente. |
-| `/projects/[projectSlug]/feedback` | Feedback, remitentes opcionales, asignaciones, comentarios e historial. |
-| `/projects/[projectSlug]/team` | Usuarios, roles asignados, fecha de ingreso y acceso a proyectos. |
-| `/projects/[projectSlug]/settings` | Identidad, estado, recepción de feedback, prioridad inicial y preferencias de notificaciones. |
-| `/home`, `/feedback`, `/team` | Redirigen a Client Portal; no requieren tablas adicionales. |
+| `setup/` | `queries.status` (gate del shell), `mutations.createWorkspace` |
+| `projects/` | `queries.list`, `mutations.create`, `settings.get/update/restore/access`, roles por proyecto (`roles`, `createRole`, `deleteRole`) |
+| `feedback/` | `queries.workspace/detail`, `mutations.update/create/addComment` |
+| `intake/` | `public.form` y `public.submit` (anónimas) |
+| `dashboard/` | `overview.get` (rango de 7, 30 o 90 días) |
+| `team/` | `queries.get`, `mutations.setMemberRole/removeMember` |
+| `invitations/` | `actions.create`, `mutations.accept`, `queries.preview` |
+| `taxonomies/` | `queries.list`, `mutations.createOption/updateOption/removeOption` |
+| `users/` | `queries.current`, `account.update` |
 
-`organizations` agrupa `projects`. Cada usuario guarda su `organizationId` y
-sus `roleIds`; `roles` contiene `admin`, `manager` y `member`, y cada rol
-referencia sus permisos en `permissions`. `projectMembers` asigna usuarios
-directamente a proyectos. `feedback` pertenece a un proyecto; `comments` y `activities` apuntan
-al feedback mediante IDs de Convex.
+## Modelo
 
-El enlace de entrada usa el slug global del proyecto y `inboxEnabled`; no necesita
-otra tabla. Las categorías son fijas, como en los ajustes actuales.
-Las métricas, carga de trabajo, iniciales y antigüedad se derivarán de los datos;
-no se guardan contadores ni textos relativos como "Yesterday". Las fechas de
-negocio usan milisegundos UTC; `_creationTime` indica cuándo se insertó el documento.
-`completedAt` permite calcular la tendencia de resoluciones.
+`organizations` agrupa `projects` y sus `taxonomies` (estados, categorías y
+prioridades propias de cada organización). `organizationMembers` vincula
+usuarios con una organización; `projectMembers` les da acceso a un proyecto con
+un rol. `roles` contiene los tres roles base (`admin`, `manager`, `member`, sin
+`projectId`) y los roles personalizados de cada proyecto; cada rol referencia
+sus permisos en `permissions`.
+
+`feedback` pertenece a un proyecto; `comments` y `activities` apuntan al
+feedback. El enlace público usa el slug del proyecto y solo acepta envíos si el
+proyecto está `Active` y `inboxEnabled` es verdadero. Las métricas, cargas de
+trabajo y antigüedades se derivan; no se guardan contadores. Las fechas de
+negocio son milisegundos UTC y `completedAt` alimenta la tendencia de
+resoluciones.
 
 ## Autenticación y autorización
 
 Convex Auth (Google OAuth + email/password) con las tablas `auth*` fusionadas
 en el esquema. Ninguna función acepta identidad del cliente: cada query y
-mutation resuelve al llamante con `getAuthUserId` y exige que su organización
-coincida con la del proyecto. `projectMembers` limita el acceso a proyectos;
-el permiso `organization.manage` concede acceso a todos los proyectos de esa
-organización.
-Las operaciones se autorizan con los permisos guardados en `roles` y
-`permissions`; `lib/auth/permissions` define las claves válidas. Cambiar los
-permisos de un rol afecta a sus usuarios sin editar cada cuenta.
-`users.current` expone solo la fila propia; `setup.status` decide el acceso
-del shell. La carga inicial del catálogo y la asignación de roles se hacen
-desde funciones internas del backend.
+mutation resuelve al llamante con `getAuthUserId`, exige pertenecer al
+proyecto (`requireProject`) y comprueba la capacidad necesaria
+(`requireCapability`). Los roles base aplican en cualquier proyecto vinculado;
+los personalizados solo en el proyecto que los define. Cambiar los permisos de
+un rol afecta a todos sus usuarios sin editar cada cuenta.
 
-Con el servidor Convex en marcha (`npx convex dev` en otra terminal), la
-configuración usa el deployment de `.env.local` en `http://127.0.0.1:3210`.
+Las únicas funciones anónimas son `intake.public.form`, que expone solo nombre,
+descripción, estado de recepción y categorías del proyecto, e
+`intake.public.submit`, que valida cada campo en el servidor.
 
-Verificado: despliegue local, TypeScript, ESLint, suite de seguridad
-(`convex/security.test.ts`), referencias de feedback, comentarios y
-actividades, y responsables dentro del proyecto.
+## Tests
 
-Referencia: [esquemas de Convex](https://docs.convex.dev/database/schemas).
+`pnpm test` ejecuta las suites en memoria (convex-test, sin red):
 
-## Convex function examples
+- `security.test.ts`: aislamiento entre organizaciones y proyectos,
+  capacidades por rol, invitaciones, gestión de miembros y archivado.
+- `taxonomies/organization.test.ts`: taxonomías por organización.
+- `intake/public.test.ts`: formulario público y validación de envíos.
 
-Write your Convex functions here.
-See https://docs.convex.dev/functions for more.
+Con el servidor en marcha (`npx convex dev`), el deployment de `.env.local`
+corre en `http://127.0.0.1:3210`.
 
-A query function that takes two arguments looks like:
-
-```ts
-// convex/myFunctions.ts
-import { query } from "./_generated/server";
-import { v } from "convex/values";
-
-export const myQueryFunction = query({
-  // Validators for arguments.
-  args: {
-    first: v.number(),
-    second: v.string(),
-  },
-
-  // Function implementation.
-  handler: async (ctx, args) => {
-    // Read the database as many times as you need here.
-    // See https://docs.convex.dev/database/reading-data.
-    const documents = await ctx.db.query("tablename").collect();
-
-    // Arguments passed from the client are properties of the args object.
-    console.log(args.first, args.second);
-
-    // Write arbitrary JavaScript here: filter, aggregate, build derived data,
-    // remove non-public properties, or create new objects.
-    return documents;
-  },
-});
-```
-
-Using this query function in a React component looks like:
-
-```ts
-const data = useQuery(api.myFunctions.myQueryFunction, {
-  first: 10,
-  second: "hello",
-});
-```
-
-A mutation function looks like:
-
-```ts
-// convex/myFunctions.ts
-import { mutation } from "./_generated/server";
-import { v } from "convex/values";
-
-export const myMutationFunction = mutation({
-  // Validators for arguments.
-  args: {
-    first: v.string(),
-    second: v.string(),
-  },
-
-  // Function implementation.
-  handler: async (ctx, args) => {
-    // Insert or modify documents in the database here.
-    // Mutations can also read from the database like queries.
-    // See https://docs.convex.dev/database/writing-data.
-    const message = { body: args.first, author: args.second };
-    const id = await ctx.db.insert("messages", message);
-
-    // Optionally, return a value from your mutation.
-    return await ctx.db.get("messages", id);
-  },
-});
-```
-
-Using this mutation function in a React component looks like:
-
-```ts
-const mutation = useMutation(api.myFunctions.myMutationFunction);
-function handleButtonPress() {
-  // fire and forget, the most common way to use mutations
-  mutation({ first: "Hello!", second: "me" });
-  // OR
-  // use the result once the mutation has completed
-  mutation({ first: "Hello!", second: "me" }).then((result) =>
-    console.log(result),
-  );
-}
-```
-
-Use the Convex CLI to push your functions to a deployment. See everything
-the Convex CLI can do by running `npx convex -h` in your project root
-directory. To learn more, launch the docs with `npx convex docs`.
+Referencia: [funciones de Convex](https://docs.convex.dev/functions).
