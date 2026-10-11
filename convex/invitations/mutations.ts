@@ -75,25 +75,27 @@ export const accept = mutation({
 				q.eq("projectId", project._id).eq("userId", userId),
 			)
 			.unique();
-		if (!existingMembership) {
+		// Project access needs an organization membership too; create it even
+		// when a project link already exists (e.g. pre-migration data).
+		const organizationMembership = await ctx.db
+			.query("organizationMembers")
+			.withIndex("by_organizationId_userId", (q) =>
+				q.eq("organizationId", project.organizationId).eq("userId", userId),
+			)
+			.unique();
+		if (!organizationMembership) {
 			const memberRole = await ctx.db
 				.query("roles")
 				.withIndex("by_name", (q) => q.eq("name", "member"))
 				.unique();
 			if (!memberRole) throw new ConvexError("Workspace access is not initialized.");
-			const organizationMembership = await ctx.db
-				.query("organizationMembers")
-				.withIndex("by_organizationId_userId", (q) =>
-					q.eq("organizationId", project.organizationId).eq("userId", userId),
-				)
-				.unique();
-			if (!organizationMembership) {
-				await ctx.db.insert("organizationMembers", {
-					organizationId: project.organizationId,
-					userId,
-					roleIds: [memberRole._id],
-				});
-			}
+			await ctx.db.insert("organizationMembers", {
+				organizationId: project.organizationId,
+				userId,
+				roleIds: [memberRole._id],
+			});
+		}
+		if (!existingMembership) {
 			await ctx.db.insert("projectMembers", {
 				projectId: project._id,
 				userId,

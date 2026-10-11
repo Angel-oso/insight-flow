@@ -1099,3 +1099,31 @@ test("the legacy membership backfill restores access exactly once", async () => 
 	});
 	expect(workspace.role).toBe("member");
 });
+
+test("accepting an invitation repairs a missing organization membership", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	const admin = t.withIdentity({ subject: ids.admin });
+	// A project link without an organization membership (pre-migration data).
+	const linkedId = await t.run(async (ctx) => {
+		const project = await ctx.db
+			.query("projects")
+			.withIndex("by_slug", (q) => q.eq("slug", "client-portal"))
+			.unique();
+		const userId = await ctx.db.insert("users", { name: "Linked Only" });
+		await ctx.db.insert("projectMembers", { projectId: project!._id, userId, joinedAt: 0 });
+		return userId;
+	});
+	const linked = t.withIdentity({ subject: linkedId });
+	const { token } = await admin.action(api.invitations.actions.create, {
+		projectSlug: "client-portal",
+		roleId: ids.memberRoleId,
+		expiresInHours: 1,
+	});
+
+	await linked.mutation(api.invitations.mutations.accept, { token });
+
+	const workspace = await linked.query(api.feedback.queries.workspace, {
+		projectSlug: "client-portal",
+	});
+	expect(workspace.role).toBe("member");
+});
