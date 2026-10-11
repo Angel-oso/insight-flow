@@ -1,4 +1,6 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
+import { hasCapability } from "../../lib/auth/permissions";
+import { resolveProjectAccess } from "../access/roles";
 import { query } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { listProjectFeedback, requireProject } from "../feedback/access";
@@ -58,10 +60,27 @@ function healthStatusFor(open: number, critical: number) {
 export const get = query({
 	args: {
 		projectSlug: v.string(),
-		rangeDays: v.union(v.literal(7), v.literal(30), v.literal(90)),
-		now: v.number(),
+		from: v.number(),
+		to: v.number(),
 	},
 	returns: v.object({
+		viewer: v.object({
+			role: v.string(),
+			permissions: v.array(schema.tables.permissions.validator.fields.key),
+		}),
+		mine: v.object({
+			open: v.array(v.object({
+				id: v.id("feedback"), title: v.string(), priority: priorityField,
+				status: statusField, receivedAt: v.number(), updatedAt: v.number(),
+			})),
+			openCount: v.number(), urgentCount: v.number(), completedInRange: v.number(),
+			withNewComments: v.array(v.object({
+				id: v.id("feedback"), title: v.string(), latestCommentAt: v.number(),
+			})),
+		}),
+		workload: v.union(v.null(), v.array(v.object({
+			name: v.string(), initials: v.string(), openAssigned: v.number(), criticalAssigned: v.number(),
+		}))),
 		project: v.object({
 			name: v.string(),
 			slug: v.string(),
@@ -123,11 +142,14 @@ export const get = query({
 		taxonomies: taxonomiesValidator,
 		generatedAt: v.number(),
 	}),
-	handler: async (ctx, { projectSlug, rangeDays, now }) => {
-		const { project } = await requireProject(ctx, projectSlug);
+	handler: async (ctx, { projectSlug, from, to }) => {
+		const { project, access } = await requireProject(ctx, projectSlug);
+		if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to || to - from > 365 * dayMs) {
+			throw new ConvexError("Choose a valid date window of at most 365 days.");
+		}
 		const projectId: Id<"projects"> = project._id;
-		const rangeStart = now - rangeDays * dayMs;
-		const previousStart = now - 2 * rangeDays * dayMs;
+		const rangeStart = from;
+		const previousStart = from - (to - from);
 
 		// Dynamic taxonomy rules: final states close the backlog, and the
 		// highest priority rank defines the critical lane.
@@ -147,7 +169,7 @@ export const get = query({
 		const receivedInRange = await ctx.db
 			.query("feedback")
 			.withIndex("by_projectId_receivedAt", (q) =>
-				q.eq("projectId", projectId).gte("receivedAt", rangeStart),
+				q.eq("projectId", projectId).gte("receivedAt", rangeStart).lt("receivedAt", to),
 			)
 			.take(201);
 		const receivedPrevious = await ctx.db
@@ -162,7 +184,7 @@ export const get = query({
 		const resolvedInRange = await ctx.db
 			.query("feedback")
 			.withIndex("by_projectId_completedAt", (q) =>
-				q.eq("projectId", projectId).gte("completedAt", rangeStart),
+				q.eq("projectId", projectId).gte("completedAt", rangeStart).lt("completedAt", to),
 			)
 			.take(201);
 		const resolvedPrevious = await ctx.db
@@ -178,17 +200,16 @@ export const get = query({
 		// Daily buckets for the movement chart.
 		const receivedByDay = new Map<number, number>();
 		for (const item of receivedInRange) {
-			if (item.receivedAt > now) continue;
 			const dayStart = rangeStart + Math.floor((item.receivedAt - rangeStart) / dayMs) * dayMs;
 			receivedByDay.set(dayStart, (receivedByDay.get(dayStart) ?? 0) + 1);
 		}
 		const resolvedByDay = new Map<number, number>();
 		for (const item of resolvedInRange) {
-			if (item.completedAt === undefined || item.completedAt > now) continue;
+			if (item.completedAt === undefined) continue;
 			const dayStart = rangeStart + Math.floor((item.completedAt - rangeStart) / dayMs) * dayMs;
 			resolvedByDay.set(dayStart, (resolvedByDay.get(dayStart) ?? 0) + 1);
 		}
-		const trend = Array.from({ length: rangeDays }, (_, index) => {
+		const trend = Array.from({ length: Math.ceil((to - from) / dayMs) }, (_, index) => {
 			const dayStart = rangeStart + index * dayMs;
 			return {
 				dayStart,
@@ -255,7 +276,7 @@ export const get = query({
 				critical += 1;
 				if (item.assigneeId === null) criticalUnassigned += 1;
 			}
-			const stale = now - item.updatedAt >= staleDays * dayMs;
+			const stale = to - item.updatedAt >= staleDays * dayMs;
 			const needsAttention =
 				rankOf(item.priority) >= laneRank - 2 ||
 				item.assigneeId === null ||
@@ -318,11 +339,64 @@ export const get = query({
 			}),
 		);
 
+		// Personal work spans the current backlog; only completions use the window.
+		const assigned = await ctx.db.query("feedback")
+			.withIndex("by_projectId_assigneeId", (q) => q.eq("projectId", projectId).eq("assigneeId", access.user._id))
+			.take(201);
+		const mineOpen = assigned.filter((item) => isOpen(item, finals))
+			.sort((a, b) => rankOf(b.priority) - rankOf(a.priority) || a.receivedAt - b.receivedAt);
+		const taxonomyRanks = [...new Set(taxonomies.priorities.map((priority) => priority.rank))].sort((a, b) => b - a);
+		const urgentRanks = new Set(taxonomyRanks.slice(0, 2));
+		const commentUpdates = await Promise.all(mineOpen.map(async (item) => {
+			const [latest] = await ctx.db.query("comments")
+				.withIndex("by_feedbackId_createdAt", (q) => q.eq("feedbackId", item._id))
+				.order("desc").take(1);
+			if (!latest || latest.authorId === access.user._id) return null;
+			// The newest comment is from someone else. Only an own comment at
+			// the exact same instant can prevent it from being strictly newer.
+			const [ownAtSameTime] = await ctx.db.query("comments")
+				.withIndex("by_feedbackId_createdAt", (q) => q.eq("feedbackId", item._id).eq("createdAt", latest.createdAt))
+				.filter((q) => q.eq(q.field("authorId"), access.user._id)).take(1);
+			return ownAtSameTime ? null : { id: item._id, title: item.title, latestCommentAt: latest.createdAt };
+		}));
+		const mine = {
+			open: mineOpen.slice(0, 8).map((item) => ({
+				id: item._id, title: item.title, priority: item.priority, status: item.status,
+				receivedAt: item.receivedAt, updatedAt: item.updatedAt,
+			})),
+			openCount: mineOpen.length,
+			urgentCount: mineOpen.filter((item) => urgentRanks.has(rankOf(item.priority))).length,
+			completedInRange: assigned.filter((item) => item.completedAt !== undefined && inRange(item.completedAt, from, to)).length,
+			withNewComments: commentUpdates.filter((item) => item !== null)
+				.sort((a, b) => b.latestCommentAt - a.latestCommentAt).slice(0, 5),
+		};
+		let workload: { name: string; initials: string; openAssigned: number; criticalAssigned: number }[] | null = null;
+		if (hasCapability(access.permissions, "feedback.assign")) {
+			const links = await ctx.db.query("projectMembers")
+				.withIndex("by_projectId_userId", (q) => q.eq("projectId", projectId)).take(201);
+			if (links.length > 200) throw new ConvexError("This overview supports up to 200 project members.");
+			const rows = await Promise.all(links.map(async (link) => {
+				const memberAccess = await resolveProjectAccess(ctx, link.userId, projectId);
+				if (!memberAccess || !hasCapability(memberAccess.permissions, "feedback.view")) return null;
+				const memberOpen = items.filter((item) => item.assigneeId === link.userId && isOpen(item, finals));
+				const name = memberAccess.user.name ?? "Team member";
+				return {
+					name, initials: initials(name),
+					openAssigned: memberOpen.length,
+					criticalAssigned: memberOpen.filter((item) => rankOf(item.priority) === taxonomyRanks[0]).length,
+				};
+			}));
+			workload = rows.filter((row) => row !== null).sort((a, b) => b.openAssigned - a.openAssigned || a.name.localeCompare(b.name));
+		}
+
 		return {
+			viewer: { role: access.role, permissions: access.permissions },
+			mine,
+			workload,
 			project: { name: project.name, slug: project.slug, status: project.status },
 			metrics: {
 				received: receivedInRange.filter((item) =>
-					inRange(item.receivedAt, rangeStart, now + 1),
+					inRange(item.receivedAt, rangeStart, to),
 				).length,
 				receivedPrevious: receivedPrevious.length,
 				open,
@@ -333,7 +407,7 @@ export const get = query({
 				completedInRange: resolvedInRange.filter(
 					(item) =>
 						item.completedAt !== undefined &&
-						inRange(item.completedAt, rangeStart, now + 1),
+						inRange(item.completedAt, rangeStart, to),
 				).length,
 				completedPrevious: resolvedPrevious.length,
 				total: items.length,
@@ -353,7 +427,7 @@ export const get = query({
 			},
 			activities,
 			taxonomies,
-			generatedAt: now,
+			generatedAt: to,
 		};
 	},
 });

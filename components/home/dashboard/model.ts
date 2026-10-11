@@ -68,6 +68,10 @@ export type OverviewHealth = {
 };
 
 export type PresentedOverview = {
+	readonly viewer: OverviewQueryData["viewer"];
+	readonly mine: OverviewQueryData["mine"];
+	readonly workload: OverviewQueryData["workload"];
+	readonly taxonomies: OverviewQueryData["taxonomies"];
 	readonly metrics: readonly OverviewMetric[];
 	readonly trendRows: readonly OverviewTrendRow[];
 	readonly trendTicks: readonly string[];
@@ -185,6 +189,10 @@ export function presentOverview(
 				: `Resolution pace slowed ${signed(rateDeltaPts, 1, " pts")}`;
 
 	return {
+		viewer: data.viewer,
+		mine: data.mine,
+		workload: data.workload,
+		taxonomies: data.taxonomies,
 		metrics: presentedMetrics,
 		trendRows,
 		trendTicks,

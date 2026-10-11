@@ -181,8 +181,8 @@ test("anonymous callers are rejected on every workspace function", async () => {
 	await expect(
 		t.query(api.dashboard.overview.get, {
 			projectSlug: "client-portal",
-			rangeDays: 30,
-			now: Date.now(),
+			from: Date.now() - 30 * 86_400_000,
+			to: Date.now(),
 		}),
 	).rejects.toThrow();
 	await expect(
@@ -482,11 +482,11 @@ test("only project administrators can create invitation links", async () => {
 	});
 	expect(invitation.token).toHaveLength(32);
 	await expect(
-		t.query(api.invitations.queries.preview, { token: invitation.token }),
+		manager.query(api.invitations.queries.preview, { token: invitation.token }),
 	).resolves.toMatchObject({
 		projectSlug: "client-portal",
 		role: "manager",
-		status: "active",
+		status: "pending",
 	});
 });
 

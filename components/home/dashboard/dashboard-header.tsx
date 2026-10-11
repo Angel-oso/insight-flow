@@ -6,6 +6,9 @@ import {
 	Plus,
 } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -18,17 +21,38 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { type Project, projectPath } from "@/lib/projects";
-import { OVERVIEW_RANGES, type OverviewRange } from "./use-overview";
+import { customWindow, OVERVIEW_RANGES, type OverviewRange } from "./date-window";
 
 export function DashboardHeader({
 	project,
-	rangeDays,
+	range,
+	rangeLabel,
+	fromDate,
+	toDate,
+	today,
 	onRangeChange,
+	onCustomChange,
+	canManageProject,
 }: {
 	readonly project: Project;
-	readonly rangeDays: OverviewRange;
+	readonly range: OverviewRange;
+	readonly rangeLabel: string;
+	readonly fromDate: string;
+	readonly toDate: string;
+	readonly today: string;
 	readonly onRangeChange: (range: OverviewRange) => void;
+	readonly onCustomChange: (from: string, to: string) => void;
+	readonly canManageProject: boolean;
 }) {
+	const [customOpen, setCustomOpen] = useState(false);
+	const [draftFrom, setDraftFrom] = useState(fromDate);
+	const [draftTo, setDraftTo] = useState(toDate);
+	const validCustom = customWindow(draftFrom, draftTo, Date.parse(`${today}T23:59:59.999Z`));
+	function openCustom() {
+		setDraftFrom(fromDate);
+		setDraftTo(toDate);
+		setCustomOpen(true);
+	}
 	return (
 		<header className="flex flex-col gap-6 border-b pb-7 xl:flex-row xl:items-end xl:justify-between">
 			<div className="flex max-w-2xl items-start gap-3">
@@ -53,10 +77,10 @@ export function DashboardHeader({
 								variant="outline"
 								size="lg"
 								className="bg-background"
-								aria-label={`Date range: last ${rangeDays} days`}
+								aria-label={`Date range: ${rangeLabel}`}
 							>
 								<CalendarDays data-icon="inline-start" />
-								Last {rangeDays} days
+								{rangeLabel}
 								<ChevronDown data-icon="inline-end" />
 							</Button>
 						}
@@ -65,20 +89,51 @@ export function DashboardHeader({
 						<DropdownMenuGroup>
 							<DropdownMenuLabel>Date range</DropdownMenuLabel>
 							<DropdownMenuRadioGroup
-								value={String(rangeDays)}
-								onValueChange={(value) =>
-									onRangeChange(Number(value) as OverviewRange)
-								}
+								value={range}
+								onValueChange={(value) => {
+									if (value === "custom") openCustom();
+									else onRangeChange(value as OverviewRange);
+								}}
 							>
 								{OVERVIEW_RANGES.map((range) => (
 									<DropdownMenuRadioItem key={range} value={String(range)}>
-										Last {range} days
+										{range === "custom" ? "Custom…" : `Last ${range} days`}
 									</DropdownMenuRadioItem>
 								))}
 							</DropdownMenuRadioGroup>
 						</DropdownMenuGroup>
 					</DropdownMenuContent>
 				</DropdownMenu>
+				{range === "custom" && <Button variant="ghost" onClick={openCustom}>Edit dates</Button>}
+				<Sheet open={customOpen} onOpenChange={setCustomOpen}>
+					<SheetContent side="bottom" className="mx-auto max-w-lg rounded-t-xl">
+						<SheetHeader>
+							<SheetTitle>Custom date range</SheetTitle>
+							<SheetDescription>Include both dates, up to 365 days. Dates use UTC.</SheetDescription>
+						</SheetHeader>
+						<form className="space-y-4 px-4 pb-6" onSubmit={(event) => {
+							event.preventDefault();
+							if (!validCustom) return;
+							onCustomChange(draftFrom, draftTo);
+							setCustomOpen(false);
+						}}>
+							<div className="grid gap-4 sm:grid-cols-2">
+								<label className="space-y-2 text-sm font-medium">
+									<span>From</span>
+									<Input type="date" required value={draftFrom} max={draftTo && draftTo <= today ? draftTo : today} onChange={(event) => setDraftFrom(event.target.value)} aria-describedby="custom-date-hint" />
+								</label>
+								<label className="space-y-2 text-sm font-medium">
+									<span>To (inclusive)</span>
+									<Input type="date" required value={draftTo} min={draftFrom} max={today} onChange={(event) => setDraftTo(event.target.value)} aria-describedby="custom-date-hint" />
+								</label>
+							</div>
+							<p id="custom-date-hint" role="status" className="text-sm text-muted-foreground">
+								{validCustom ? validCustom.label : "Choose valid dates through today, covering no more than 365 days."}
+							</p>
+							<Button type="submit" disabled={!validCustom}>Apply date range</Button>
+						</form>
+					</SheetContent>
+				</Sheet>
 				<Button
 					variant="outline"
 					size="lg"
@@ -89,14 +144,14 @@ export function DashboardHeader({
 					<Inbox data-icon="inline-start" />
 					View feedback
 				</Button>
-				<Button
+				{canManageProject && <Button
 					size="lg"
 					nativeButton={false}
 					render={<Link href={projectPath(project.slug, "settings")} />}
 				>
 					<Plus data-icon="inline-start" />
 					Project settings
-				</Button>
+				</Button>}
 			</div>
 		</header>
 	);
