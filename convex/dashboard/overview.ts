@@ -11,6 +11,7 @@ import {
 	taxonomiesValidator,
 } from "../taxonomies/lib";
 import schema from "../schema";
+import { projectHealth } from "./health";
 
 const dayMs = 24 * 60 * 60 * 1000;
 const staleDays = 7;
@@ -50,12 +51,6 @@ function isOpen(item: Doc<"feedback">, finals: ReadonlySet<string>) {
 	return !finals.has(item.status);
 }
 
-/** Transparent project-health rules, shared by the overview and its footer. */
-function healthStatusFor(open: number, critical: number) {
-	if (critical > 0) return "At risk" as const;
-	if (open > 0) return "Needs attention" as const;
-	return "Healthy" as const;
-}
 
 export const get = query({
 	args: {
@@ -427,7 +422,7 @@ export const get = query({
 				completed,
 				total: items.length,
 				lastActivityAt,
-				status: healthStatusFor(open, critical),
+				status: projectHealth(items, finals, priorityRank).status,
 			},
 			activities,
 			taxonomies,

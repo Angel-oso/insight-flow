@@ -149,3 +149,37 @@ test("personal lists are capped, and equal-time comments are not newer", async (
 	expect(result.mine.withNewComments).toHaveLength(5);
 	expect(result.mine.withNewComments.map((item) => item.id)).not.toContain(ids.highNew);
 });
+
+test("project and organization overviews share one health rule, including a high open backlog", async () => {
+	const t = convexTest(schema, modules);
+	const ownerId = await t.run((ctx) => ctx.db.insert("users", { name: "Owner" }));
+	const owner = t.withIdentity({ subject: ownerId });
+	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, {
+		name: "Health Org",
+		projectName: "Busy",
+	});
+	const addOpen = (count: number) =>
+		t.run(async (ctx) => {
+			const project = (await ctx.db.query("projects").withIndex("by_slug", (q) => q.eq("slug", projectSlug)).unique())!;
+			for (let i = 0; i < count; i += 1) {
+				await ctx.db.insert("feedback", {
+					projectId: project._id, title: `Item ${i}`, description: "Open item", category: "Bug",
+					priority: "Low", status: "New", assigneeId: null, sender: null,
+					receivedAt: from, updatedAt: from,
+				});
+			}
+			return project.organizationId;
+		});
+	const health = async (organizationId: Id<"organizations">) => [
+		(await owner.query(api.dashboard.overview.get, { projectSlug, from, to })).health.status,
+		(await owner.query(api.organizations.queries.overview, { organizationId, from, to })).admin
+			?.health.find((row) => row.slug === projectSlug)?.health,
+	];
+
+	// One low-priority open item is backlog, not risk, on both screens.
+	const organizationId = await addOpen(1);
+	expect(await health(organizationId)).toEqual(["Needs attention", "Needs attention"]);
+	// 20 open items without criticals is a clearly high backlog: at risk on both.
+	await addOpen(19);
+	expect(await health(organizationId)).toEqual(["At risk", "At risk"]);
+});

@@ -3,17 +3,12 @@ import { resolveOrganizationAccess, resolveProjectAccess } from "../access/roles
 import { query } from "../_generated/server";
 import { listProjectFeedback, requireProject, requireUserId } from "../feedback/access";
 import { getFinalStatuses, getPriorityRanks } from "../taxonomies/lib";
+import { projectHealth } from "../dashboard/health";
 import { requireOrganization } from "./access";
 
-/** MVP health is transparent: 20+ open items is a clearly high backlog. */
-export const HIGH_OPEN_BACKLOG = 20;
 export const ORGANIZATION_PROJECT_LIMIT = 50;
 const dayMs = 86_400_000;
 
-function healthFor(open: number, critical: number) {
-	if (critical > 0 || open >= HIGH_OPEN_BACKLOG) return "At risk" as const;
-	return open > 0 ? "Needs attention" as const : "Healthy" as const;
-}
 
 function inRange(at: number | undefined, start: number, end: number) {
 	return at !== undefined && at >= start && at < end;
@@ -100,7 +95,7 @@ export const overview = query({
 				health: {
 					slug: project.slug, name: project.name, received, open, critical, completed,
 					total: items.length, resolutionRate: items.length ? completed / items.length : 0,
-					latestActivityAt, health: healthFor(open, critical),
+					latestActivityAt, health: projectHealth(items, finals, ranks).status,
 				},
 				metrics: {
 					received,
