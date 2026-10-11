@@ -85,6 +85,7 @@ export type FeedbackFiltersState = {
 	readonly category: "All categories" | FeedbackCategory;
 	readonly dateRange: DateRange;
 	readonly attentionOnly: boolean;
+	readonly mineOnly: boolean;
 };
 
 export function FeedbackFilters({
@@ -97,7 +98,9 @@ export function FeedbackFilters({
 	pageSize,
 	totalItems,
 	onPageChange,
+	canFilterMine,
 }: {
+	readonly canFilterMine: boolean;
 	readonly filters: FeedbackFiltersState;
 	readonly taxonomies: Taxonomies;
 	readonly onFiltersChange: (filters: FeedbackFiltersState) => void;
@@ -114,7 +117,8 @@ export function FeedbackFilters({
 		filters.priority !== "All priorities" ||
 		filters.category !== "All categories" ||
 		filters.dateRange !== "Any time" ||
-		filters.attentionOnly;
+		filters.attentionOnly ||
+		filters.mineOnly;
 
 	return (
 		<div className="@container border-b p-4 sm:p-5">
@@ -183,6 +187,19 @@ export function FeedbackFilters({
 							onFiltersChange({ ...filters, dateRange })
 						}
 					/>
+					{canFilterMine ? (
+						<Button
+							variant={filters.mineOnly ? "secondary" : "ghost"}
+							size="sm"
+							className="shrink-0"
+							onClick={() =>
+								onFiltersChange({ ...filters, mineOnly: !filters.mineOnly })
+							}
+							aria-pressed={filters.mineOnly}
+						>
+							Assigned to me
+						</Button>
+					) : null}
 					<Button
 						variant={filters.attentionOnly ? "secondary" : "ghost"}
 						size="sm"

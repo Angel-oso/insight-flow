@@ -908,3 +908,72 @@ test("archived projects can be restored only by project managers", async () => {
 		admin.mutation(api.projects.settings.restore, { projectSlug: "client-portal" }),
 	).rejects.toThrow("Only archived projects can be restored.");
 });
+
+test("triagers log feedback manually and the activity names them", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	const manager = t.withIdentity({ subject: ids.manager });
+	const { feedbackId } = await manager.mutation(api.feedback.mutations.create, {
+		projectSlug: "client-portal",
+		title: "Export needs CSV",
+		description: "Raised on the quarterly call with Northwind.",
+		category: "Feature request",
+		priority: "High",
+		senderName: "Nora North",
+		senderEmail: "Nora@Northwind.example",
+	});
+	const { item, activities } = await manager.query(api.feedback.queries.detail, {
+		projectSlug: "client-portal",
+		feedbackId,
+	});
+	expect(item).toMatchObject({
+		title: "Export needs CSV",
+		category: "Feature request",
+		priority: "High",
+		status: "New",
+		assigneeId: null,
+		sender: { name: "Nora North", email: "nora@northwind.example" },
+	});
+	expect(activities).toHaveLength(1);
+	expect(activities[0]).toMatchObject({
+		type: "received",
+		actorId: ids.manager,
+		message: "Logged by the team",
+	});
+});
+
+test("manual logging requires triage rights, a live project, and valid values", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	const admin = t.withIdentity({ subject: ids.admin });
+	const member = t.withIdentity({ subject: ids.member });
+	const input = {
+		projectSlug: "client-portal",
+		title: "Search ignores accents",
+		description: "Searching for café returns nothing.",
+		category: "Bug",
+		priority: "Medium",
+	};
+	const counts = () =>
+		t.run(async (ctx) => ({
+			feedback: (await ctx.db.query("feedback").collect()).length,
+			activities: (await ctx.db.query("activities").collect()).length,
+		}));
+	const before = await counts();
+
+	await expect(member.mutation(api.feedback.mutations.create, input)).rejects.toThrow(
+		"You cannot make this change.",
+	);
+	await expect(
+		admin.mutation(api.feedback.mutations.create, { ...input, priority: "Urgent" }),
+	).rejects.toThrow("Choose a valid priority for this project.");
+	await expect(
+		admin.mutation(api.feedback.mutations.create, { ...input, title: "Hi" }),
+	).rejects.toThrow("Give your feedback a title between 3 and 120 characters.");
+	await admin.mutation(api.projects.settings.update, {
+		projectSlug: "client-portal",
+		changes: { status: "Archived" },
+	});
+	await expect(admin.mutation(api.feedback.mutations.create, input)).rejects.toThrow(
+		"Archived projects cannot be edited.",
+	);
+	expect(await counts()).toEqual(before);
+});

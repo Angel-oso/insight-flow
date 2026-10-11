@@ -9,11 +9,13 @@ import {
 	taxonomyItemFor,
 	type Taxonomies,
 } from "@/lib/taxonomy";
+import type { Id } from "@/convex/_generated/dataModel";
 import type { Assignee, FeedbackItem } from "./model";
 import { useFeedbackDetail, useFeedbackWrites } from "./use-feedback";
 import { FeedbackDetail, type FeedbackPermissions } from "./feedback-detail";
 import { FeedbackFilters, type FeedbackFiltersState } from "./feedback-filters";
 import { FEEDBACK_PAGE_SIZE, FeedbackList } from "./feedback-list";
+import { LogFeedback } from "./log-feedback";
 
 const defaultFilters: FeedbackFiltersState = {
 	query: "",
@@ -22,6 +24,7 @@ const defaultFilters: FeedbackFiltersState = {
 	category: "All categories",
 	dateRange: "Any time",
 	attentionOnly: false,
+	mineOnly: false,
 };
 
 export function FeedbackWorkspace({
@@ -33,7 +36,11 @@ export function FeedbackWorkspace({
 	project,
 	role,
 	grantedPermissions,
+	viewerId,
+	defaultPriority,
 }: {
+	readonly viewerId: Id<"users"> | null;
+	readonly defaultPriority: string;
 	readonly items: readonly FeedbackItem[];
 	readonly assignees: readonly Assignee[];
 	readonly taxonomies: Taxonomies;
@@ -58,7 +65,13 @@ export function FeedbackWorkspace({
 		canComment:
 			!archived && !pending && hasCapability(grantedPermissions, "feedback.comment"),
 	};
-	const [filters, setFilters] = useState<FeedbackFiltersState>(defaultFilters);
+	// Members start on their own queue; triagers start on the whole inbox.
+	const [filters, setFilters] = useState<FeedbackFiltersState>(() => ({
+		...defaultFilters,
+		mineOnly:
+			viewerId !== null && !hasCapability(grantedPermissions, "feedback.triage"),
+	}));
+	const canLog = !archived && hasCapability(grantedPermissions, "feedback.triage");
 	const [selectedId, setSelectedId] = useQueryState("feedback", parseAsString);
 	const finals = useMemo(() => finalStatusValues(taxonomies), [taxonomies]);
 	// Severity lane = highest rank present in the open backlog.
@@ -71,9 +84,8 @@ export function FeedbackWorkspace({
 		}
 		return lane;
 	}, [items, finals, taxonomies]);
-	const visibleItems = useMemo(
-		() =>
-			items.filter((item) => {
+	const visibleItems = useMemo(() => {
+		const matches = items.filter((item) => {
 				const searchText =
 					`${item.title} ${item.description} ${item.project} ${item.sender?.name ?? ""} ${item.sender?.email ?? ""}`.toLowerCase();
 				const matchesQuery = searchText.includes(
@@ -98,17 +110,29 @@ export function FeedbackWorkspace({
 						item.assigneeId === null ||
 						item.isStale);
 
+				const matchesMine = !filters.mineOnly || item.assigneeId === viewerId;
+
 				return (
 					matchesQuery &&
 					matchesStatus &&
 					matchesPriority &&
 					matchesCategory &&
 					matchesDate &&
+					matchesMine &&
 					(!filters.attentionOnly || needsAttention)
 				);
-			}),
-		[filters, items, finals, laneRank, taxonomies],
-	);
+			});
+		if (!filters.mineOnly) return matches;
+		// Personal queue: open work first, then highest priority, then oldest.
+		const rankOf = (item: FeedbackItem) =>
+			taxonomyItemFor(taxonomies.priorities, item.priority).rank;
+		return [...matches].sort(
+			(a, b) =>
+				Number(finals.has(a.status)) - Number(finals.has(b.status)) ||
+				rankOf(b) - rankOf(a) ||
+				b.ageDays - a.ageDays,
+		);
+	}, [filters, items, finals, laneRank, taxonomies, viewerId]);
 
 	const selectedItem = items.find((item) => item.id === selectedId) ?? null;
 	const [pageState, setPageState] = useState(() => {
@@ -198,9 +222,23 @@ export function FeedbackWorkspace({
 							{roleLabel} view · {project.name} triage queue and controls.
 						</p>
 					</div>
-					<p className="text-sm text-muted-foreground">
-						{visibleItems.length} of {items.length} items
-					</p>
+					<div className="flex items-center gap-3">
+						<p className="text-sm text-muted-foreground">
+							{visibleItems.length} of {items.length} items
+						</p>
+						{canLog ? (
+							<LogFeedback
+								projectSlug={project.slug}
+								defaultPriority={defaultPriority}
+								taxonomies={taxonomies}
+								onLogged={(feedbackId) => {
+									setFilters(defaultFilters);
+									setPageState({ page: 1, selectedId: feedbackId });
+									void setSelectedId(feedbackId);
+								}}
+							/>
+						) : null}
+					</div>
 				</div>
 			</div>
 			{error ? (
@@ -214,6 +252,7 @@ export function FeedbackWorkspace({
 				</p>
 			) : null}
 			<FeedbackFilters
+				canFilterMine={viewerId !== null}
 				filters={filters}
 				taxonomies={taxonomies}
 				onFiltersChange={updateFilters}

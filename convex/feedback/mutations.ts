@@ -2,7 +2,8 @@ import { ConvexError, v } from "convex/values";
 import { hasCapability } from "../../lib/auth/permissions";
 import { mutation } from "../_generated/server";
 import { resolveProjectAccess } from "../access/roles";
-import { requireCapability, requireFeedback } from "./access";
+import { requireCapability, requireFeedback, requireProject } from "./access";
+import { insertFeedback } from "./create";
 import { getFinalStatuses, getTaxonomies } from "../taxonomies/lib";
 import schema from "../schema";
 
@@ -101,6 +102,37 @@ export const update = mutation({
 				: {}),
 		});
 		return null;
+	},
+});
+
+/**
+ * Team members log feedback that arrived outside the public link (calls,
+ * email, meetings). Same validation and lifecycle as public intake, but the
+ * triager sets the priority and the activity is attributed to them.
+ */
+export const create = mutation({
+	args: {
+		projectSlug: v.string(),
+		title: v.string(),
+		description: v.string(),
+		category: v.string(),
+		priority: v.string(),
+		senderName: v.optional(v.string()),
+		senderEmail: v.optional(v.string()),
+	},
+	returns: v.object({ feedbackId: v.id("feedback") }),
+	handler: async (ctx, { projectSlug, ...fields }) => {
+		const { project, access } = await requireProject(ctx, projectSlug);
+		requireCapability(access.permissions, "feedback.triage");
+		if (project.status === "Archived")
+			throw new ConvexError("Archived projects cannot be edited.");
+		const feedbackId = await insertFeedback(ctx, {
+			project,
+			...fields,
+			actorId: access.user._id,
+			message: "Logged by the team",
+		});
+		return { feedbackId };
 	},
 });
 
