@@ -12,7 +12,15 @@ import { projectPath } from "@/lib/projects";
 export function AcceptInvitation({ token }: { readonly token: string }) {
 	const router = useRouter();
 	const { isLoading, isAuthenticated } = useConvexAuth();
-	const invitation = useQuery(api.invitations.queries.preview, { token });
+	const invitation = useQuery(
+		api.invitations.queries.preview,
+		isAuthenticated ? { token } : "skip",
+	);
+	const [now, setNow] = useState(() => Date.now());
+	useEffect(() => {
+		const timer = setInterval(() => setNow(Date.now()), 30000);
+		return () => clearInterval(timer);
+	}, []);
 	const accept = useMutation(api.invitations.mutations.accept);
 	const [isAccepting, setIsAccepting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -35,11 +43,11 @@ export function AcceptInvitation({ token }: { readonly token: string }) {
 		}
 	}
 
+	if (!isLoading && !isAuthenticated) {
+		return <p role="status" className="p-8 text-sm text-muted-foreground">Redirecting to sign in…</p>;
+	}
 	if (isLoading || invitation === undefined) {
 		return <p role="status" className="p-8 text-sm text-muted-foreground">Checking invitation…</p>;
-	}
-	if (!isAuthenticated) {
-		return <p role="status" className="p-8 text-sm text-muted-foreground">Redirecting to sign in…</p>;
 	}
 
 	if (!invitation) {
@@ -49,7 +57,8 @@ export function AcceptInvitation({ token }: { readonly token: string }) {
 			</InvitationCard>
 		);
 	}
-	if (invitation.status === "accepted" || invitation.status === "expired") {
+	const expired = invitation.status === "pending" && invitation.expiresAt <= now;
+	if (invitation.status === "accepted" || expired) {
 		return (
 			<InvitationCard title="Invitation unavailable">
 				<p className="text-sm text-muted-foreground">

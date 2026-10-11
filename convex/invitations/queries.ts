@@ -1,3 +1,4 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 
 import { query } from "../_generated/server";
@@ -11,15 +12,15 @@ export const preview = query({
 			projectSlug: v.string(),
 			role: schema.tables.roles.validator.fields.name,
 			expiresAt: v.number(),
-			status: v.union(
-				v.literal("active"),
-				v.literal("expired"),
-				v.literal("accepted"),
-			),
+			// Expiry is derived on the client from expiresAt: queries never
+			// read the clock, so a cached result cannot go stale.
+			status: v.union(v.literal("pending"), v.literal("accepted")),
 		}),
 		v.null(),
 	),
 	handler: async (ctx, { token }) => {
+		// Only signed-in visitors (the invitee) can read invitation details.
+		if (!(await getAuthUserId(ctx))) return null;
 		const invitation = await ctx.db
 			.query("projectInvitations")
 			.withIndex("by_token", (q) => q.eq("token", token))
@@ -30,11 +31,7 @@ export const preview = query({
 			ctx.db.get("roles", invitation.roleId),
 		]);
 		if (!project || !role) return null;
-		const status: "active" | "expired" | "accepted" = invitation.acceptedAt
-			? "accepted"
-			: invitation.expiresAt <= Date.now()
-				? "expired"
-				: "active";
+		const status = invitation.acceptedAt ? ("accepted" as const) : ("pending" as const);
 		return {
 			projectName: project.name,
 			projectSlug: project.slug,

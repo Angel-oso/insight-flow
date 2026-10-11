@@ -197,6 +197,8 @@ export const createRole = mutation({
 	handler: async (ctx, { projectSlug, name: rawName, permissionKeys }) => {
 		const { project, access } = await requireProject(ctx, projectSlug);
 		requireCapability(access.permissions, "organization.manage");
+		if (project.status === "Archived")
+			throw new ConvexError("Archived projects cannot be edited.");
 		const name = rawName.trim().replace(/\s+/g, " ");
 		if (name.length < 2 || name.length > 40) {
 			throw new ConvexError("Give the role a name between 2 and 40 characters.");
@@ -230,6 +232,8 @@ export const deleteRole = mutation({
 	handler: async (ctx, { projectSlug, roleId }) => {
 		const { project, access } = await requireProject(ctx, projectSlug);
 		requireCapability(access.permissions, "organization.manage");
+		if (project.status === "Archived")
+			throw new ConvexError("Archived projects cannot be edited.");
 		const [role, memberRole] = await Promise.all([
 			ctx.db.get("roles", roleId),
 			ctx.db.query("roles").withIndex("by_name", (q) => q.eq("name", "member")).unique(),

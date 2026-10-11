@@ -16,6 +16,8 @@ export const setMemberRole = mutation({
 		const actorId = await requireUserId(ctx);
 		const { project, access } = await requireProject(ctx, projectSlug);
 		requireCapability(access.permissions, "organization.manage");
+		if (project.status === "Archived")
+			throw new ConvexError("Archived projects cannot be edited.");
 		if (memberId === actorId) {
 			throw new ConvexError("Choose another administrator to change your own role.");
 		}
@@ -65,6 +67,8 @@ export const removeMember = mutation({
 		const actorId = await requireUserId(ctx);
 		const { project, access } = await requireProject(ctx, projectSlug);
 		requireCapability(access.permissions, "team.manage");
+		if (project.status === "Archived")
+			throw new ConvexError("Archived projects cannot be edited.");
 		if (memberId === actorId) {
 			throw new ConvexError("You cannot remove yourself from a project.");
 		}

@@ -28,6 +28,8 @@ export const create = internalMutation({
 		if (!creator || !hasCapability(creator.permissions, "team.manage")) {
 			throw new ConvexError("You cannot invite members to this project.");
 		}
+		if (project.status === "Archived")
+			throw new ConvexError("Archived projects cannot be edited.");
 		const role = await ctx.db.get("roles", args.roleId);
 		if (!role || (role.projectId !== undefined && role.projectId !== project._id)) {
 			throw new ConvexError("This role is not available.");
@@ -69,6 +71,8 @@ export const accept = mutation({
 			ctx.db.get("roles", invitation.roleId),
 		]);
 		if (!user || !project || !role) throw new ConvexError("This invitation is no longer available.");
+		if (project.status === "Archived")
+			throw new ConvexError("Archived projects cannot be edited.");
 		const existingMembership = await ctx.db
 			.query("projectMembers")
 			.withIndex("by_projectId_userId", (q) =>
