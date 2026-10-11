@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { Inbox, KanbanSquare, LayoutDashboard } from "lucide-react";
+import Link from "next/link";
+import { LogoMark } from "@/components/brand/logo";
 
 const PROOFS = [
 	{
@@ -27,17 +29,12 @@ export function AuthShell({ children }: { readonly children: ReactNode }) {
 					aria-label="About InsightFlow"
 					className="flex flex-col justify-between gap-10 rounded-xl bg-[oklch(0.21_0.025_264)] p-6 text-[oklch(0.985_0_0)] sm:p-8 lg:min-h-[640px] lg:p-10"
 				>
-					<div className="flex items-center gap-2.5">
-						<span
-							aria-hidden="true"
-							className="flex size-9 items-center justify-center rounded-lg bg-[oklch(0.49_0.2_276)] text-white"
-						>
-							<Inbox className="size-5" strokeWidth={2.25} />
-						</span>
+					<Link href="/" aria-label="InsightFlow home" className="flex w-fit items-center gap-2.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">
+						<LogoMark className="size-9" />
 						<span className="font-heading text-base font-semibold tracking-tight">
 							InsightFlow
 						</span>
-					</div>
+					</Link>
 
 					<div className="max-w-md">
 						<h1 className="font-heading text-3xl leading-[1.15] font-semibold tracking-[-0.03em] text-balance sm:text-4xl">

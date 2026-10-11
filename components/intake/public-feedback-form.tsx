@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
+import { LogoMark } from "@/components/brand/logo";
 
 export function PublicFeedbackForm({ projectSlug }: { readonly projectSlug: string }) {
 	const project = useQuery(api.intake.public.form, { projectSlug });
@@ -136,7 +137,7 @@ export function PublicFeedbackForm({ projectSlug }: { readonly projectSlug: stri
 				</>
 			)}
 			<footer className="mt-8 text-center text-xs text-muted-foreground">
-				<Link href="/" className="rounded-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">Powered by InsightFlow</Link>
+				<Link href="/" className="inline-flex items-center gap-2 rounded-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"><LogoMark className="size-5" />Powered by InsightFlow</Link>
 			</footer>
 		</main>
 	);
