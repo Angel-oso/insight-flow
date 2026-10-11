@@ -21,15 +21,14 @@ function HealthBadge({ health }: { readonly health: keyof typeof healthStyles })
 
 export function AdminOverview({ admin, projects, now }: { readonly admin: Admin; readonly projects: Overview["projects"]; readonly now: number }) {
 	const { metrics, health } = admin;
-	const period = presentPeriodMetrics(metrics);
-	// Health box: all-time resolved / all feedback, like the project health box.
 	const resolved = health.reduce((sum, project) => sum + project.completed, 0);
-	const resolution = metrics.total ? `${Math.round((resolved / metrics.total) * 100)}%` : "—";
+	const period = presentPeriodMetrics({ ...metrics, resolved });
+	const resolution = period.resolutionRate;
 	const presentedMetrics: OverviewMetric[] = [
 		{ label: "Feedback received", value: String(metrics.received), change: period.receivedChange, context: "vs. previous period", tone: "primary" },
 		{ label: "Open feedback", value: String(metrics.open), change: "Current backlog", context: "across all projects", tone: "info" },
 		{ label: "Critical items", value: String(metrics.critical), change: "Top priority", context: "open items requiring intervention", tone: "danger" },
-		{ label: "Resolution rate", value: period.resolutionRate, change: period.resolutionChange, context: "vs. previous period", tone: "success" },
+		{ label: "Resolution rate", value: period.resolutionRate, change: period.resolutionChange, context: period.resolutionContext, tone: "success" },
 	];
 	const overallHealth = health.some((project) => project.health === "At risk") ? "At risk" : metrics.open > 0 ? "Needs attention" : "Healthy";
 	const latestActivityAt = Math.max(0, ...health.map((project) => project.latestActivityAt));
