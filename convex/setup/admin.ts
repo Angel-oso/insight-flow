@@ -21,10 +21,11 @@ const defaultGrants: Record<Role, readonly Capability[]> = {
 		"feedback.update",
 		"feedback.comment",
 		"project.view",
+		"team.view",
 	],
 };
 
-/** Create missing catalog records without replacing existing custom grants. */
+/** Create catalog records and restore baseline grants without removing custom ones. */
 export const seedAccessCatalog = internalMutation({
 	args: {},
 	returns: v.null(),
@@ -43,7 +44,19 @@ export const seedAccessCatalog = internalMutation({
 				.query("roles")
 				.withIndex("by_name", (q) => q.eq("name", name))
 				.unique();
-			if (existing) continue;
+			if (existing) {
+				const baselinePermissionIds = defaultGrants[name].map(
+					(key) => permissionIds.get(key)!,
+				);
+				const mergedPermissionIds = [...new Set([
+					...existing.permissionIds,
+					...baselinePermissionIds,
+				])];
+				if (mergedPermissionIds.length !== existing.permissionIds.length) {
+					await ctx.db.patch("roles", existing._id, { permissionIds: mergedPermissionIds });
+				}
+				continue;
+			}
 			await ctx.db.insert("roles", {
 				name,
 				permissionIds: defaultGrants[name].map((key) => permissionIds.get(key)!),

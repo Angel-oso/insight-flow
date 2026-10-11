@@ -10,7 +10,7 @@
  */
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { capabilities, type Capability, type Role } from "../lib/auth/permissions";
 import schema from "./schema";
@@ -148,6 +148,7 @@ async function seedTestWorkspace() {
 		return {
 			admin, manager, member, academy, itemId,
 			adminRoleId: roleIds.get("admin")!,
+			managerRoleId: roleIds.get("manager")!,
 			memberRoleId: roleIds.get("member")!,
 			projectManagePermissionId: permissionIds.get("project.manage")!,
 		};
@@ -265,12 +266,14 @@ test("administrators create persisted projects with their own membership", async
 	const manager = t.withIdentity({ subject: ids.manager });
 	await expect(
 		manager.mutation(api.projects.mutations.create, {
+			currentProjectSlug: "client-portal",
 			name: "Test workspace",
 			description: "Should not be created.",
 		}),
 	).rejects.toThrow();
 
 	const project = await admin.mutation(api.projects.mutations.create, {
+		currentProjectSlug: "client-portal",
 		name: "Test workspace",
 		description: "Created from the project switcher.",
 	});
@@ -283,6 +286,245 @@ test("administrators create persisted projects with their own membership", async
 		project: { name: "Test workspace", slug: "test-workspace" },
 		summary: { memberCount: 1 },
 	});
+});
+
+test("new accounts create their first workspace as its administrator and owner", async () => {
+	const t = convexTest(schema, modules);
+	const userId = await t.run((ctx) =>
+		ctx.db.insert("users", { name: "Nia New", email: "nia@example.com" }),
+	);
+	const user = t.withIdentity({ subject: userId });
+
+	await expect(user.query(api.setup.queries.status, {})).resolves.toEqual({
+		authenticated: true,
+		hasMembership: false,
+		canCreateWorkspace: true,
+	});
+	const workspace = await user.mutation(api.setup.mutations.createWorkspace, {
+		name: "North Star",
+	});
+
+	expect(workspace).toEqual({ projectSlug: "north-star", workspaceName: "North Star" });
+	await expect(user.query(api.setup.queries.status, {})).resolves.toEqual({
+		authenticated: true,
+		hasMembership: true,
+		canCreateWorkspace: true,
+	});
+	await expect(user.query(api.projects.queries.list, {})).resolves.toContainEqual({
+		slug: "north-star",
+		name: "North Star",
+		description: "The first project in this workspace.",
+	});
+	const secondWorkspace = await user.mutation(api.setup.mutations.createWorkspace, {
+		name: "Second workspace",
+	});
+
+	const ownership = await t.run(async (ctx) => {
+		const organization = await ctx.db
+			.query("organizations")
+			.withIndex("by_slug", (q) => q.eq("slug", workspace.projectSlug))
+			.unique();
+		const organizationMembership = organization
+			? await ctx.db
+				.query("organizationMembers")
+				.withIndex("by_organizationId_userId", (q) =>
+					q.eq("organizationId", organization._id).eq("userId", userId),
+				)
+				.unique()
+			: null;
+		const role = organizationMembership?.roleIds[0]
+			? await ctx.db.get("roles", organizationMembership.roleIds[0])
+			: null;
+		const project = await ctx.db
+			.query("projects")
+			.withIndex("by_slug", (q) => q.eq("slug", workspace.projectSlug))
+			.unique();
+		const membership = project
+			? await ctx.db
+				.query("projectMembers")
+				.withIndex("by_projectId_userId", (q) =>
+					q.eq("projectId", project._id).eq("userId", userId),
+				)
+				.unique()
+			: null;
+		return { organization, role, membership };
+	});
+
+	expect(ownership.organization?.ownerId).toBe(userId);
+	expect(ownership.role?.name).toBe("admin");
+	expect(ownership.membership?.userId).toBe(userId);
+	await expect(user.query(api.projects.queries.list, {})).resolves.toEqual(
+		expect.arrayContaining([{ slug: secondWorkspace.projectSlug, name: "Second workspace", description: "The first project in this workspace." }]),
+	);
+});
+
+test("an invitation grants only its project role and expires before acceptance", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	const recipientId = await t.run((ctx) =>
+		ctx.db.insert("users", { name: "Ivy Invitee", email: "ivy@example.com" }),
+	);
+	const token = "valid-project-invitation";
+	const expiredToken = "expired-project-invitation";
+	await t.run(async (ctx) => {
+		const portal = await ctx.db
+			.query("projects")
+			.withIndex("by_slug", (q) => q.eq("slug", "client-portal"))
+			.unique();
+		if (!portal) throw new Error("Missing test project.");
+		await ctx.db.insert("projectInvitations", {
+			projectId: portal._id,
+			roleId: ids.adminRoleId,
+			token,
+			createdBy: ids.admin,
+			expiresAt: Date.now() + 60_000,
+		});
+		await ctx.db.insert("projectInvitations", {
+			projectId: portal._id,
+			roleId: ids.memberRoleId,
+			token: expiredToken,
+			createdBy: ids.admin,
+			expiresAt: Date.now() - 1,
+		});
+	});
+	const recipient = t.withIdentity({ subject: recipientId });
+
+	await expect(recipient.mutation(api.invitations.mutations.accept, { token })).resolves.toEqual({
+		projectSlug: "client-portal",
+	});
+	await expect(
+		recipient.query(api.team.queries.get, { projectSlug: "client-portal" }),
+	).resolves.toMatchObject({ project: { slug: "client-portal" } });
+	await expect(
+		recipient.query(api.feedback.queries.workspace, { projectSlug: "academy" }),
+	).rejects.toThrow(/access denied/i);
+	await expect(
+		recipient.mutation(api.invitations.mutations.accept, { token: expiredToken }),
+	).rejects.toThrow(/expired/i);
+
+	const membership = await t.run(async (ctx) => {
+		const project = await ctx.db
+			.query("projects")
+			.withIndex("by_slug", (q) => q.eq("slug", "client-portal"))
+			.unique();
+		if (!project) return null;
+		return ctx.db
+			.query("projectMembers")
+			.withIndex("by_projectId_userId", (q) =>
+				q.eq("projectId", project._id).eq("userId", recipientId),
+			)
+			.unique();
+	});
+	expect(membership?.roleId).toBe(ids.adminRoleId);
+	const secondWorkspaceInvite = await t.run(async (ctx) => {
+		const organizationId = await ctx.db.insert("organizations", {
+			name: "Second Org",
+			slug: "second-org",
+			ownerId: ids.admin,
+		});
+		const projectId = await ctx.db.insert("projects", {
+			organizationId,
+			name: "Second project",
+			slug: "second-project",
+			description: "Second workspace project.",
+			status: "Active",
+			inboxEnabled: true,
+			defaultPriority: "Medium",
+			criticalAlerts: false,
+			weeklyDigest: false,
+		});
+		const token = "second-workspace-invitation";
+		await ctx.db.insert("projectInvitations", {
+			projectId,
+			roleId: ids.memberRoleId,
+			token,
+			createdBy: ids.admin,
+			expiresAt: Date.now() + 60_000,
+		});
+		return token;
+	});
+	await expect(
+		recipient.mutation(api.invitations.mutations.accept, { token: secondWorkspaceInvite }),
+	).resolves.toEqual({ projectSlug: "second-project" });
+	await expect(recipient.query(api.projects.queries.list, {})).resolves.toEqual(
+		expect.arrayContaining([
+			{ slug: "client-portal", name: "Client Portal", description: "Test project." },
+			{ slug: "second-project", name: "Second project", description: "Second workspace project." },
+		]),
+	);
+});
+
+test("only project administrators can create invitation links", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	const admin = t.withIdentity({ subject: ids.admin });
+	const manager = t.withIdentity({ subject: ids.manager });
+
+	await expect(
+		manager.action(api.invitations.actions.create, {
+			projectSlug: "client-portal",
+			roleId: ids.memberRoleId,
+			expiresInHours: 1,
+		}),
+	).rejects.toThrow(/cannot invite/i);
+	const invitation = await admin.action(api.invitations.actions.create, {
+		projectSlug: "client-portal",
+		roleId: ids.managerRoleId,
+		expiresInHours: 6,
+	});
+	expect(invitation.token).toHaveLength(32);
+	await expect(
+		t.query(api.invitations.queries.preview, { token: invitation.token }),
+	).resolves.toMatchObject({
+		projectSlug: "client-portal",
+		role: "manager",
+		status: "active",
+	});
+});
+
+test("administrators manage project roles and deleted roles fall back to member", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	const admin = t.withIdentity({ subject: ids.admin });
+	const member = t.withIdentity({ subject: ids.member });
+	const customRole = await admin.mutation(api.projects.settings.createRole, {
+		projectSlug: "client-portal",
+		name: "Triage lead",
+		permissionKeys: ["feedback.triage", "feedback.assign"],
+	});
+
+	await admin.mutation(api.team.mutations.setMemberRole, {
+		projectSlug: "client-portal",
+		memberId: ids.member,
+		roleId: customRole.id,
+	});
+	const workspace = await admin.query(api.feedback.queries.workspace, {
+		projectSlug: "client-portal",
+	});
+	await member.mutation(api.feedback.mutations.update, {
+		projectSlug: "client-portal",
+		feedbackId: workspace.items[0]._id,
+		changes: { priority: "Low" },
+	});
+
+	await expect(
+		admin.mutation(api.projects.settings.deleteRole, {
+			projectSlug: "client-portal",
+			roleId: ids.adminRoleId,
+		}),
+	).rejects.toThrow(/built-in roles cannot be deleted/i);
+	await admin.mutation(api.projects.settings.deleteRole, {
+		projectSlug: "client-portal",
+		roleId: customRole.id,
+	});
+	await expect(
+		member.mutation(api.feedback.mutations.update, {
+			projectSlug: "client-portal",
+			feedbackId: workspace.items[0]._id,
+			changes: { priority: "High" },
+		}),
+	).rejects.toThrow();
+	const roles = await admin.query(api.projects.settings.roles, {
+		projectSlug: "client-portal",
+	});
+	expect(roles.roles).not.toContainEqual(expect.objectContaining({ id: customRole.id }));
 });
 
 test("capabilities hold per role: members cannot triage or manage", async () => {
@@ -316,6 +558,21 @@ test("capabilities hold per role: members cannot triage or manage", async () => 
 			changes: { description: "hijacked" },
 		}),
 	).rejects.toThrow();
+});
+
+test("the access catalog grants existing members team visibility", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	const member = t.withIdentity({ subject: ids.member });
+
+	await expect(
+		member.query(api.team.queries.get, { projectSlug: "client-portal" }),
+	).rejects.toThrow(/cannot make this change/i);
+
+	await t.mutation(internal.setup.admin.seedAccessCatalog, {});
+
+	await expect(
+		member.query(api.team.queries.get, { projectSlug: "client-portal" }),
+	).resolves.toMatchObject({ project: { slug: "client-portal" } });
 });
 
 test("assignee spoofing is impossible: owners must belong to the project", async () => {

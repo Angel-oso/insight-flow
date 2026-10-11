@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { hasCapability } from "../../lib/auth/permissions";
 import { mutation } from "../_generated/server";
-import { resolveUserAccess } from "../access/roles";
+import { resolveProjectAccess } from "../access/roles";
 import { requireCapability, requireFeedback } from "./access";
 import { getFinalStatuses, getTaxonomies } from "../taxonomies/lib";
 import schema from "../schema";
@@ -54,10 +54,14 @@ export const update = mutation({
 					q.eq("projectId", project._id).eq("userId", changes.assigneeId!),
 				)
 				.unique();
-			const assignee = await resolveUserAccess(ctx, changes.assigneeId);
+			const assignee = await resolveProjectAccess(
+				ctx,
+				changes.assigneeId,
+				project._id,
+			);
 			if (
 				!projectAccess ||
-				assignee?.user.organizationId !== project.organizationId ||
+				!assignee ||
 				!hasCapability(assignee.permissions, "project.view") ||
 				!hasCapability(assignee.permissions, "feedback.view")
 			)

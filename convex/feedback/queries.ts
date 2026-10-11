@@ -1,7 +1,8 @@
 import { ConvexError, v } from "convex/values";
 import { query } from "../_generated/server";
+import type { Doc } from "../_generated/dataModel";
 import { hasCapability } from "../../lib/auth/permissions";
-import { resolveUserAccess } from "../access/roles";
+import { resolveProjectAccess } from "../access/roles";
 import {
 	listProjectFeedback,
 	requireFeedback,
@@ -32,15 +33,18 @@ export const workspace = query({
 			.take(51);
 		if (links.length > 50)
 			throw new ConvexError("This workspace supports up to 50 project members.");
-		const assignees = [];
-		for (const link of links) {
-			const assignee = await resolveUserAccess(ctx, link.userId);
-			if (
-				assignee?.user.organizationId === project.organizationId &&
-				hasCapability(assignee.permissions, "project.view") &&
-				hasCapability(assignee.permissions, "feedback.view")
-			) assignees.push(assignee.user);
-		}
+		const assignees = (
+			await Promise.all(
+				links.map(async (link) => {
+					const assignee = await resolveProjectAccess(ctx, link.userId, project._id);
+					return assignee &&
+						hasCapability(assignee.permissions, "project.view") &&
+						hasCapability(assignee.permissions, "feedback.view")
+						? assignee.user
+						: null;
+				}),
+			)
+		).filter((assignee): assignee is Doc<"users"> => assignee !== null);
 		const taxonomies = await getTaxonomies(ctx);
 		return {
 			project,

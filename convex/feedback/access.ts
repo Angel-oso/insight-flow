@@ -1,7 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError } from "convex/values";
 import { hasCapability, type Capability } from "../../lib/auth/permissions";
-import { resolveUserAccess } from "../access/roles";
+import { resolveProjectAccess } from "../access/roles";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
@@ -34,22 +34,13 @@ export async function requireProject(ctx: QueryCtx, slug: string) {
 		project.organizationId,
 	);
 	if (!organization) throw new ConvexError("Project not found.");
-	const access = await resolveUserAccess(ctx, userId);
+	const access = await resolveProjectAccess(ctx, userId, project._id);
 	if (
 		!access ||
-		access.user.organizationId !== organization._id ||
 		!hasCapability(access.permissions, "project.view") ||
 		!hasCapability(access.permissions, "feedback.view")
 	)
 		throw new ConvexError("Feedback access denied.");
-	const projectLink = await ctx.db
-		.query("projectMembers")
-		.withIndex("by_projectId_userId", (q) =>
-			q.eq("projectId", project._id).eq("userId", userId),
-		)
-		.unique();
-	if (!projectLink && !hasCapability(access.permissions, "organization.manage"))
-		throw new ConvexError("Project access denied.");
 	return { project, access, organization };
 }
 

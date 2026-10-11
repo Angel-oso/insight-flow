@@ -2,7 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { query } from "../_generated/server";
 import { hasCapability } from "../../lib/auth/permissions";
-import { resolveUserAccess } from "../access/roles";
+import { resolveProjectAccess } from "../access/roles";
 
 /**
  * Access gate for the authenticated app shell. The client renders the
@@ -15,37 +15,38 @@ export const status = query({
 	returns: v.object({
 		authenticated: v.boolean(),
 		hasMembership: v.boolean(),
+		canCreateWorkspace: v.boolean(),
 	}),
 	handler: async (ctx) => {
 		const userId = await getAuthUserId(ctx);
-		if (!userId) return { authenticated: false, hasMembership: false };
-		const access = await resolveUserAccess(ctx, userId);
-		if (!access?.user.organizationId ||
-			!hasCapability(access.permissions, "project.view") ||
-			!hasCapability(access.permissions, "feedback.view"))
-			return { authenticated: true, hasMembership: false };
-		const organization = await ctx.db.get("organizations", access.user.organizationId);
-		if (!organization) return { authenticated: true, hasMembership: false };
+		if (!userId) {
+			return { authenticated: false, hasMembership: false, canCreateWorkspace: false };
+		}
+		const user = await ctx.db.get("users", userId);
+		if (!user) {
+			return { authenticated: true, hasMembership: false, canCreateWorkspace: false };
+		}
 		let hasWorkspace = false;
-		if (hasCapability(access.permissions, "organization.manage")) {
-			hasWorkspace = (await ctx.db.query("projects")
-				.withIndex("by_organizationId", (q) => q.eq("organizationId", organization._id))
-				.first()) !== null;
-		} else {
-			const links = await ctx.db.query("projectMembers")
-				.withIndex("by_userId", (q) => q.eq("userId", userId))
-				.take(51);
-			for (const link of links) {
-				const project = await ctx.db.get("projects", link.projectId);
-				if (project?.organizationId === organization._id) {
-					hasWorkspace = true;
-					break;
-				}
+		const links = await ctx.db.query("projectMembers")
+			.withIndex("by_userId", (q) => q.eq("userId", userId))
+			.take(51);
+		for (const link of links) {
+			const project = await ctx.db.get("projects", link.projectId);
+			if (!project) continue;
+			const projectAccess = await resolveProjectAccess(ctx, userId, project._id);
+			if (
+				projectAccess &&
+				hasCapability(projectAccess.permissions, "project.view") &&
+				hasCapability(projectAccess.permissions, "feedback.view")
+			) {
+				hasWorkspace = true;
+				break;
 			}
 		}
 		return {
 			authenticated: true,
 			hasMembership: hasWorkspace,
+			canCreateWorkspace: true,
 		};
 	},
 });

@@ -17,6 +17,7 @@ export const current = query({
 			name: v.union(v.string(), v.null()),
 			email: v.union(v.string(), v.null()),
 			image: v.union(v.string(), v.null()),
+			hasPassword: v.boolean(),
 		}),
 		v.null(),
 	),
@@ -25,11 +26,18 @@ export const current = query({
 		if (!userId) return null;
 		const user = await ctx.db.get("users", userId as Id<"users">);
 		if (!user) return null;
+		const passwordAccount = await ctx.db
+			.query("authAccounts")
+			.withIndex("userIdAndProvider", (q) =>
+				q.eq("userId", user._id).eq("provider", "password"),
+			)
+			.unique();
 		return {
 			id: user._id,
 			name: user.name ?? null,
 			email: user.email ?? null,
 			image: user.image ?? null,
+			hasPassword: Boolean(passwordAccount),
 		};
 	},
 });

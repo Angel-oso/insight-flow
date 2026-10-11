@@ -2,7 +2,7 @@
 
 import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useMemo, useState } from "react";
-import { hasCapability, type Capability, type Role } from "@/lib/auth/permissions";
+import { hasCapability, type Capability } from "@/lib/auth/permissions";
 import type { Project } from "@/lib/projects";
 import {
 	finalStatusValues,
@@ -40,11 +40,11 @@ export function FeedbackWorkspace({
 	readonly now: number;
 	readonly archived: boolean;
 	readonly project: Project;
-	readonly role: Role;
+	readonly role: string;
 	readonly grantedPermissions: readonly Capability[];
 }) {
 	const roleLabel =
-		role === "admin" ? "Admin" : role === "manager" ? "Manager" : "Member";
+		role === "admin" ? "Admin" : role === "manager" ? "Manager" : role;
 	const { pending, error, updateFeedback, addComment } = useFeedbackWrites(
 		project.slug,
 	);

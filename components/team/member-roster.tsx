@@ -1,20 +1,24 @@
 "use client";
 
 import { Search, X } from "lucide-react";
+import { useMutation } from "convex/react";
 import { useMemo, useState } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { memberRoles, type MemberRole, type TeamMember } from "./model";
+import { api } from "@/convex/_generated/api";
+import type { FunctionReturnType } from "convex/server";
+import type { MemberRole, TeamMember } from "./model";
 
 type RoleFilter = "All" | MemberRole;
+type ProjectRole = FunctionReturnType<typeof api.projects.settings.roles>["roles"][number];
 
-const roleStyles: Record<MemberRole, string> = {
-	Administrator: "bg-dashboard-primary-soft text-dashboard-primary",
-	Manager: "bg-dashboard-info-soft text-dashboard-info",
-	Member: "bg-muted text-muted-foreground",
-};
+function roleStyle(role: string) {
+	if (role === "admin") return "bg-dashboard-primary-soft text-dashboard-primary";
+	if (role === "manager") return "bg-dashboard-info-soft text-dashboard-info";
+	return "bg-muted text-muted-foreground";
+}
 
 const avatarStyles = [
 	"bg-dashboard-primary-soft text-dashboard-primary",
@@ -27,7 +31,7 @@ const avatarStyles = [
 function RoleBadge({ role }: { readonly role: MemberRole }) {
 	return (
 		<span
-			className={`inline-flex h-6 items-center rounded-md px-2 text-xs font-medium ${roleStyles[role]}`}
+			className={`inline-flex h-6 items-center rounded-md px-2 text-xs font-medium ${roleStyle(role)}`}
 		>
 			{role}
 		</span>
@@ -58,11 +62,24 @@ function MemberIdentity({
 
 export function MemberRoster({
 	members,
+	projectSlug,
+	roles,
+	canManageRoles,
 }: {
 	readonly members: readonly TeamMember[];
+	readonly projectSlug: string;
+	readonly roles: readonly ProjectRole[];
+	readonly canManageRoles: boolean;
 }) {
 	const [query, setQuery] = useState("");
 	const [role, setRole] = useState<RoleFilter>("All");
+	const [changingMemberId, setChangingMemberId] = useState<string | null>(null);
+	const [roleError, setRoleError] = useState<string | null>(null);
+	const setMemberRole = useMutation(api.team.mutations.setMemberRole);
+	const memberRoles = useMemo(
+		() => [...new Set(members.map((member) => member.role))].sort(),
+		[members],
+	);
 
 	const visibleMembers = useMemo(
 		() =>
@@ -81,6 +98,19 @@ export function MemberRoster({
 		setQuery("");
 		setRole("All");
 	};
+
+	async function changeRole(member: TeamMember, roleId: ProjectRole["id"]) {
+		if (roleId === member.roleId) return;
+		setChangingMemberId(member.id);
+		setRoleError(null);
+		try {
+			await setMemberRole({ projectSlug, memberId: member.id, roleId });
+		} catch (cause) {
+			setRoleError(cause instanceof Error ? cause.message : "Could not change this member's role.");
+		} finally {
+			setChangingMemberId(null);
+		}
+	}
 
 	return (
 		<section className="rounded-xl bg-card ring-1 ring-foreground/10">
@@ -125,6 +155,7 @@ export function MemberRoster({
 						))}
 					</fieldset>
 				</div>
+				{roleError ? <p role="alert" className="text-sm text-destructive">{roleError}</p> : null}
 			</div>
 
 			{visibleMembers.length > 0 ? (
@@ -150,7 +181,11 @@ export function MemberRoster({
 											<MemberIdentity member={member} index={index} />
 										</td>
 										<td className="px-5 py-4">
-											<RoleBadge role={member.role} />
+											{canManageRoles ? (
+												<select aria-label={`Change role for ${member.name}`} value={member.roleId} disabled={changingMemberId === member.id} onChange={(event) => void changeRole(member, event.target.value as ProjectRole["id"])} className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm">
+													{roles.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
+												</select>
+											) : <RoleBadge role={member.role} />}
 										</td>
 										<td className="px-5 py-4 text-muted-foreground">
 											{member.projectCount}{" "}
@@ -181,7 +216,11 @@ export function MemberRoster({
 							<article key={member.email} className="space-y-4 p-5">
 								<div className="flex items-start justify-between gap-4">
 									<MemberIdentity member={member} index={index} />
-									<RoleBadge role={member.role} />
+									{canManageRoles ? (
+										<select aria-label={`Change role for ${member.name}`} value={member.roleId} disabled={changingMemberId === member.id} onChange={(event) => void changeRole(member, event.target.value as ProjectRole["id"])} className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm">
+											{roles.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
+										</select>
+									) : <RoleBadge role={member.role} />}
 								</div>
 								<div className="grid grid-cols-2 gap-4 border-t pt-4 text-sm">
 									<div>

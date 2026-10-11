@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { hasCapability } from "../../lib/auth/permissions";
-import { resolveUserAccess } from "../access/roles";
+import { resolveProjectAccess } from "../access/roles";
 import { mutation } from "../_generated/server";
 import { requireUserId } from "../feedback/access";
 import { getTaxonomies } from "../taxonomies/lib";
@@ -15,17 +15,24 @@ function slugFromName(name: string) {
 }
 
 export const create = mutation({
-	args: { name: v.string(), description: v.string() },
+	args: { currentProjectSlug: v.string(), name: v.string(), description: v.string() },
 	returns: v.object({
 		slug: v.string(),
 		name: v.string(),
 		description: v.string(),
 	}),
-	handler: async (ctx, { name: rawName, description: rawDescription }) => {
+	handler: async (ctx, { currentProjectSlug, name: rawName, description: rawDescription }) => {
 		const userId = await requireUserId(ctx);
-		const access = await resolveUserAccess(ctx, userId);
+		const currentProject = await ctx.db
+			.query("projects")
+			.withIndex("by_slug", (q) => q.eq("slug", currentProjectSlug))
+			.unique();
+		const access = currentProject
+			? await resolveProjectAccess(ctx, userId, currentProject._id)
+			: null;
 		if (
-			!access?.user.organizationId ||
+			!currentProject ||
+			!access ||
 			!hasCapability(access.permissions, "organization.manage")
 		)
 			throw new ConvexError("You cannot create projects in this workspace.");
@@ -44,7 +51,13 @@ export const create = mutation({
 			.unique();
 		if (existing) throw new ConvexError("A project with this name already exists.");
 
-		const { priorities } = await getTaxonomies(ctx);
+		const [{ priorities }, projectRole] = await Promise.all([
+			getTaxonomies(ctx),
+			ctx.db
+				.query("roles")
+				.withIndex("by_name", (q) => q.eq("name", access.role))
+				.unique(),
+		]);
 		const defaultPriority =
 			priorities.find((priority) => priority.value === "Medium") ??
 			priorities.reduce((lowest, priority) =>
@@ -52,7 +65,7 @@ export const create = mutation({
 			);
 		const now = Date.now();
 		const projectId = await ctx.db.insert("projects", {
-			organizationId: access.user.organizationId,
+			organizationId: currentProject.organizationId,
 			name,
 			slug,
 			description: description || "New project workspace.",
@@ -63,7 +76,12 @@ export const create = mutation({
 			weeklyDigest: false,
 			updatedAt: now,
 		});
-		await ctx.db.insert("projectMembers", { projectId, userId, joinedAt: now });
+		await ctx.db.insert("projectMembers", {
+			projectId,
+			userId,
+			...(projectRole ? { roleId: projectRole._id } : {}),
+			joinedAt: now,
+		});
 
 		return { slug, name, description: description || "New project workspace." };
 	},

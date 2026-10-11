@@ -4,22 +4,11 @@ import type { Id } from "@/convex/_generated/dataModel";
 
 export type TeamQueryData = FunctionReturnType<typeof api.team.queries.get>;
 
-export type MemberRole = "Administrator" | "Manager" | "Member";
-
-const roleLabels: Record<string, MemberRole> = {
-	admin: "Administrator",
-	manager: "Manager",
-	member: "Member",
-};
-
-export const memberRoles: readonly MemberRole[] = [
-	"Administrator",
-	"Manager",
-	"Member",
-];
+export type MemberRole = string;
 
 export type TeamMember = {
 	readonly id: Id<"users">;
+	readonly roleId: Id<"roles">;
 	readonly name: string;
 	readonly email: string;
 	readonly initials: string;
@@ -68,10 +57,11 @@ export function presentTeam(data: TeamQueryData, now: number): PresentedTeam {
 		summary: { ...data.summary },
 		members: data.members.map((member) => ({
 			id: member.id,
+			roleId: member.roleId,
 			name: member.name,
 			email: member.email,
 			initials: initials(member.name),
-			role: roleLabels[member.role] ?? "Member",
+			role: member.role,
 			projectCount: member.projectCount,
 			openAssigned: member.openAssigned,
 			criticalAssigned: member.criticalAssigned,

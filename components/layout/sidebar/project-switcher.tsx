@@ -80,11 +80,11 @@ export function ProjectSwitcher({ project }: { readonly project: Project }) {
 		setIsCreating(true);
 		setCreateError(null);
 		try {
-			const project = await create({ name, description });
+			const createdProject = await create({ currentProjectSlug: project.slug, name, description });
 			setIsCreateOpen(false);
 			setProjectName("");
 			setDescription("");
-			selectProject(project.slug);
+			selectProject(createdProject.slug);
 		} catch (cause) {
 			setCreateError(
 				cause instanceof ConvexError
