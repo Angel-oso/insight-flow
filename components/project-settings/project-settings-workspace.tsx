@@ -2,6 +2,7 @@
 
 import {
 	Archive,
+	ArchiveRestore,
 	Check,
 	ChevronDown,
 	Inbox,
@@ -154,7 +155,7 @@ export function ProjectSettingsWorkspace({
 	readonly project: Project;
 }) {
 	const data = useProjectSettingsData(project.slug);
-	const { pending, error, saveSettings } = useProjectSettingsWrites(project.slug);
+	const { pending, error, saveSettings, restoreProject } = useProjectSettingsWrites(project.slug);
 	const taxonomies = useTaxonomies(project.slug);
 	const [draft, setDraft] = useState<SettingsState | null>(null);
 	const [hasSaved, setHasSaved] = useState(false);
@@ -196,6 +197,13 @@ export function ProjectSettingsWorkspace({
 		}
 	};
 
+	const handleRestore = async () => {
+		if (await restoreProject()) {
+			setDraft({ ...settings, status: "Active" });
+			setHasSaved(true);
+		}
+	};
+
 	const handleArchive = async () => {
 		if (
 			await saveSettings({
@@ -221,13 +229,26 @@ export function ProjectSettingsWorkspace({
 					<div>
 						<p className="font-semibold">This project is archived.</p>
 						<p className="mt-1 text-sm leading-6">
-							Feedback intake and configuration changes are paused for this
-							project.
+							Feedback intake and configuration changes are paused. Restore it
+							to make it active again.
 						</p>
 					</div>
-					<span className="inline-flex w-fit items-center gap-1.5 rounded-md border border-current/20 px-2 py-1 text-xs font-semibold">
-						<Archive className="size-3.5" /> Archived
-					</span>
+					{canManage ? (
+						<Button
+							type="button"
+							variant="outline"
+							className="bg-background"
+							disabled={pending}
+							onClick={() => void handleRestore()}
+						>
+							<ArchiveRestore data-icon="inline-start" />
+							{pending ? "Restoring…" : "Restore project"}
+						</Button>
+					) : (
+						<span className="inline-flex w-fit items-center gap-1.5 rounded-md border border-current/20 px-2 py-1 text-xs font-semibold">
+							<Archive className="size-3.5" /> Archived
+						</span>
+					)}
 				</section>
 			) : null}
 			{error ? (

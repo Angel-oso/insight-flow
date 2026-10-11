@@ -801,3 +801,110 @@ test("an administrator assigned to another organization cannot enter this projec
 		caller.query(api.feedback.queries.workspace, { projectSlug: "client-portal" }),
 	).rejects.toThrow(/denied/i);
 });
+
+test("administrators remove project members and their open work becomes unassigned", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	const admin = t.withIdentity({ subject: ids.admin });
+	const member = t.withIdentity({ subject: ids.member });
+	const doneId = await t.run(async (ctx) => {
+		await ctx.db.patch("feedback", ids.itemId, { assigneeId: ids.member });
+		const item = (await ctx.db.get("feedback", ids.itemId))!;
+		const { _id, _creationTime, ...fields } = item;
+		return ctx.db.insert("feedback", { ...fields, status: "Completed", title: "Shipped" });
+	});
+
+	await admin.mutation(api.team.mutations.removeMember, {
+		projectSlug: "client-portal",
+		memberId: ids.member,
+	});
+
+	await expect(
+		member.query(api.feedback.queries.workspace, { projectSlug: "client-portal" }),
+	).rejects.toThrow();
+	await t.run(async (ctx) => {
+		expect((await ctx.db.get("feedback", ids.itemId))!.assigneeId).toBeNull();
+		expect((await ctx.db.get("feedback", doneId))!.assigneeId).toBe(ids.member);
+		const links = await ctx.db
+			.query("projectMembers")
+			.withIndex("by_userId", (q) => q.eq("userId", ids.member))
+			.collect();
+		expect(links).toHaveLength(0);
+		const activities = await ctx.db
+			.query("activities")
+			.withIndex("by_feedbackId_createdAt", (q) => q.eq("feedbackId", ids.itemId))
+			.collect();
+		expect(activities.map((activity) => activity.message)).toContain("Owner set to Unassigned");
+	});
+	const team = await admin.query(api.team.queries.get, { projectSlug: "client-portal" });
+	expect(team.members.map((entry) => entry.id)).not.toContain(ids.member);
+});
+
+test("member removal requires team management, never targets yourself, and keeps an administrator", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	const admin = t.withIdentity({ subject: ids.admin });
+	const manager = t.withIdentity({ subject: ids.manager });
+	const countLinks = () =>
+		t.run(async (ctx) => (await ctx.db.query("projectMembers").collect()).length);
+	const before = await countLinks();
+
+	await expect(
+		manager.mutation(api.team.mutations.removeMember, {
+			projectSlug: "client-portal",
+			memberId: ids.member,
+		}),
+	).rejects.toThrow("You cannot make this change.");
+	await expect(
+		admin.mutation(api.team.mutations.removeMember, {
+			projectSlug: "client-portal",
+			memberId: ids.admin,
+		}),
+	).rejects.toThrow("You cannot remove yourself from a project.");
+
+	// A custom role may manage the team, but it still cannot drop the last administrator.
+	const role = await admin.mutation(api.projects.settings.createRole, {
+		projectSlug: "client-portal",
+		name: "Team lead",
+		permissionKeys: ["team.manage"],
+	});
+	await admin.mutation(api.team.mutations.setMemberRole, {
+		projectSlug: "client-portal",
+		memberId: ids.manager,
+		roleId: role.id,
+	});
+	await expect(
+		manager.mutation(api.team.mutations.removeMember, {
+			projectSlug: "client-portal",
+			memberId: ids.admin,
+		}),
+	).rejects.toThrow("A project must keep at least one administrator.");
+	expect(await countLinks()).toBe(before);
+});
+
+test("archived projects can be restored only by project managers", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	const admin = t.withIdentity({ subject: ids.admin });
+	const member = t.withIdentity({ subject: ids.member });
+	await admin.mutation(api.projects.settings.update, {
+		projectSlug: "client-portal",
+		changes: { status: "Archived" },
+	});
+	await expect(
+		admin.mutation(api.projects.settings.update, {
+			projectSlug: "client-portal",
+			changes: { name: "Renamed" },
+		}),
+	).rejects.toThrow("Archived projects cannot be edited.");
+
+	await expect(
+		member.mutation(api.projects.settings.restore, { projectSlug: "client-portal" }),
+	).rejects.toThrow("You cannot make this change.");
+	const stillArchived = await admin.query(api.projects.settings.get, { projectSlug: "client-portal" });
+	expect(stillArchived.project.status).toBe("Archived");
+
+	await admin.mutation(api.projects.settings.restore, { projectSlug: "client-portal" });
+	const restored = await admin.query(api.projects.settings.get, { projectSlug: "client-portal" });
+	expect(restored.project.status).toBe("Active");
+	await expect(
+		admin.mutation(api.projects.settings.restore, { projectSlug: "client-portal" }),
+	).rejects.toThrow("Only archived projects can be restored.");
+});

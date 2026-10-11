@@ -120,6 +120,23 @@ export const update = mutation({
 	},
 });
 
+/** Archive is reversible: managers bring a project back to Active. */
+export const restore = mutation({
+	args: { projectSlug: v.string() },
+	returns: v.null(),
+	handler: async (ctx, { projectSlug }) => {
+		const { project, access } = await requireProject(ctx, projectSlug);
+		requireCapability(access.permissions, "project.manage");
+		if (project.status !== "Archived")
+			throw new ConvexError("Only archived projects can be restored.");
+		await ctx.db.patch("projects", project._id, {
+			status: "Active",
+			updatedAt: Date.now(),
+		});
+		return null;
+	},
+});
+
 /**
  * The caller's project grants, server-decided for capability UI.
  * Returns null for anonymous callers and non-members so the settings

@@ -3,6 +3,7 @@
 import { useQuery } from "convex/react";
 import type { Project } from "@/lib/projects";
 import { api } from "@/convex/_generated/api";
+import { hasCapability } from "@/lib/auth/permissions";
 import { MemberRoster } from "./member-roster";
 import { TeamHeader } from "./team-header";
 import { ProjectInvitations } from "./project-invitations";
@@ -12,6 +13,9 @@ import { useProjectTeam } from "./use-team";
 export function Team({ project }: { readonly project: Project }) {
 	const team = useProjectTeam(project.slug);
 	const roleSettings = useQuery(api.projects.settings.roles, { projectSlug: project.slug });
+	const access = useQuery(api.projects.settings.access, { projectSlug: project.slug });
+	const viewer = useQuery(api.users.queries.current, {});
+	const canManageTeam = access ? hasCapability(access.permissions, "team.manage") : false;
 
 	if (!team) {
 		return (
@@ -37,6 +41,8 @@ export function Team({ project }: { readonly project: Project }) {
 					projectSlug={project.slug}
 					roles={roleSettings?.roles ?? []}
 					canManageRoles={roleSettings?.canManageRoles ?? false}
+					canManageTeam={canManageTeam}
+					currentUserId={viewer?.id ?? null}
 				/>
 			</div>
 			<footer className="mt-8 border-t pt-5 text-xs text-muted-foreground">

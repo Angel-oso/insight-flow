@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, X } from "lucide-react";
+import { Search, UserMinus, X } from "lucide-react";
 import { useMutation } from "convex/react";
 import { useMemo, useState } from "react";
 
@@ -38,6 +38,62 @@ function RoleBadge({ role }: { readonly role: MemberRole }) {
 	);
 }
 
+function RemoveMember({
+	member,
+	projectSlug,
+	onError,
+}: {
+	readonly member: TeamMember;
+	readonly projectSlug: string;
+	readonly onError: (message: string | null) => void;
+}) {
+	const removeMember = useMutation(api.team.mutations.removeMember);
+	const [confirming, setConfirming] = useState(false);
+	const [pending, setPending] = useState(false);
+
+	async function remove() {
+		setPending(true);
+		onError(null);
+		try {
+			await removeMember({ projectSlug, memberId: member.id });
+		} catch (cause) {
+			onError(cause instanceof Error ? cause.message : "Could not remove this member.");
+			setConfirming(false);
+		} finally {
+			setPending(false);
+		}
+	}
+
+	if (!confirming) {
+		return (
+			<Button
+				size="sm"
+				variant="ghost"
+				aria-label={`Remove ${member.name} from this project`}
+				onClick={() => setConfirming(true)}
+			>
+				<UserMinus data-icon="inline-start" />
+				Remove
+			</Button>
+		);
+	}
+	return (
+		<div className="flex flex-wrap items-center justify-end gap-1.5">
+			<span className="text-xs text-muted-foreground">
+				{member.openAssigned > 0
+					? `${member.openAssigned} open ${member.openAssigned === 1 ? "item returns" : "items return"} to unassigned.`
+					: "Remove from project?"}
+			</span>
+			<Button size="sm" variant="destructive" disabled={pending} onClick={() => void remove()}>
+				{pending ? "Removing…" : "Confirm"}
+			</Button>
+			<Button size="sm" variant="ghost" disabled={pending} onClick={() => setConfirming(false)}>
+				Cancel
+			</Button>
+		</div>
+	);
+}
+
 function MemberIdentity({
 	member,
 	index,
@@ -65,12 +121,17 @@ export function MemberRoster({
 	projectSlug,
 	roles,
 	canManageRoles,
+	canManageTeam,
+	currentUserId,
 }: {
 	readonly members: readonly TeamMember[];
 	readonly projectSlug: string;
 	readonly roles: readonly ProjectRole[];
 	readonly canManageRoles: boolean;
+	readonly canManageTeam: boolean;
+	readonly currentUserId: string | null;
 }) {
+	const canRemove = (member: TeamMember) => canManageTeam && member.id !== currentUserId;
 	const [query, setQuery] = useState("");
 	const [role, setRole] = useState<RoleFilter>("All");
 	const [changingMemberId, setChangingMemberId] = useState<string | null>(null);
@@ -161,7 +222,7 @@ export function MemberRoster({
 			{visibleMembers.length > 0 ? (
 				<>
 					<div className="hidden overflow-x-auto md:block">
-						<table className="w-full min-w-[720px] text-left text-sm">
+						<table className="w-full min-w-[820px] text-left text-sm">
 							<thead className="border-b text-xs text-muted-foreground">
 								<tr>
 									<th className="px-5 py-3 font-medium">Member</th>
@@ -169,6 +230,11 @@ export function MemberRoster({
 									<th className="px-5 py-3 font-medium">Scope</th>
 									<th className="px-5 py-3 text-right font-medium">Open</th>
 									<th className="px-5 py-3 font-medium">Last activity</th>
+									{canManageTeam ? (
+										<th className="px-5 py-3 text-right font-medium">
+											<span className="sr-only">Actions</span>
+										</th>
+									) : null}
 								</tr>
 							</thead>
 							<tbody className="divide-y">
@@ -205,6 +271,15 @@ export function MemberRoster({
 												{member.joined}
 											</p>
 										</td>
+										{canManageTeam ? (
+											<td className="px-5 py-4 text-right">
+												{canRemove(member) ? (
+													<RemoveMember member={member} projectSlug={projectSlug} onError={setRoleError} />
+												) : (
+													<span className="text-xs text-muted-foreground">You</span>
+												)}
+											</td>
+										) : null}
 									</tr>
 								))}
 							</tbody>
@@ -245,6 +320,9 @@ export function MemberRoster({
 								<p className="text-xs text-muted-foreground">
 									Last activity {member.lastActivity} · {member.joined}
 								</p>
+								{canRemove(member) ? (
+									<RemoveMember member={member} projectSlug={projectSlug} onError={setRoleError} />
+								) : null}
 							</article>
 						))}
 					</div>
