@@ -11,7 +11,7 @@ export function AppShell({
 	project,
 }: {
 	readonly children: React.ReactNode;
-	readonly project: Project;
+	readonly project?: Project;
 }) {
 	return (
 		<SidebarProvider>

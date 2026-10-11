@@ -16,7 +16,7 @@ import type { Project } from "@/lib/projects";
 export function AppSidebar({
 	project,
 	...props
-}: React.ComponentProps<typeof Sidebar> & { readonly project: Project }) {
+}: React.ComponentProps<typeof Sidebar> & { readonly project?: Project }) {
 	return (
 		<Sidebar collapsible="icon" {...props}>
 			<SidebarHeader>
@@ -26,7 +26,7 @@ export function AppSidebar({
 			</SidebarHeader>
 
 			<SidebarContent>
-				<WorkspaceNavigation projectSlug={project.slug} />
+				{project ? <WorkspaceNavigation projectSlug={project.slug} /> : null}
 			</SidebarContent>
 
 			<SidebarFooter>
