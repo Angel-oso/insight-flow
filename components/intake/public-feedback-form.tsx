@@ -7,6 +7,13 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import { LogoMark } from "@/components/brand/logo";
@@ -41,11 +48,15 @@ export function PublicFeedbackForm({ projectSlug }: { readonly projectSlug: stri
 			setError("Write a description between 10 and 5,000 characters.");
 			return;
 		}
+		if (!category) {
+			setError("Choose a category for your feedback.");
+			return;
+		}
 		submitting.current = true;
 		setPending(true);
 		try {
 			const result = await submit({
-				projectSlug, title, description, category: text("category"),
+				projectSlug, title, description, category,
 				senderName: text("senderName"), senderEmail: text("senderEmail"), website: text("website"),
 			});
 			setReceipt({ ...result, projectName: project.name });
@@ -108,10 +119,20 @@ export function PublicFeedbackForm({ projectSlug }: { readonly projectSlug: stri
 										</div>
 										<div className="space-y-2">
 											<label htmlFor="intake-category" className="text-sm font-medium">Category</label>
-											<select id="intake-category" name="category" required value={category} onChange={(event) => setCategory(event.target.value)} aria-describedby="intake-category-hint" className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50">
-												<option value="" disabled>Choose a category</option>
-												{project.categories.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-											</select>
+											<Select
+												items={project.categories}
+												value={category || null}
+												onValueChange={(value) => setCategory(value ?? "")}
+											>
+												<SelectTrigger id="intake-category" aria-describedby="intake-category-hint" className="h-9 w-full">
+													<SelectValue placeholder="Choose a category" />
+												</SelectTrigger>
+												<SelectContent>
+													{project.categories.map((item) => (
+														<SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
 											<p id="intake-category-hint" className="text-xs text-muted-foreground">{project.categories.find((item) => item.value === category)?.description ?? "Choose the closest match for your feedback."}</p>
 										</div>
 										<div className="grid gap-5 border-t pt-5 sm:grid-cols-2">

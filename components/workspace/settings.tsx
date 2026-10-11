@@ -10,6 +10,13 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { OrganizationSwitcher } from "./organization-switcher";
 import { useOrganization } from "./use-organization";
@@ -86,7 +93,24 @@ function SettingsForms({ organizationId, settings }: { readonly organizationId: 
 				{settings.isOwner ? <>
 					<p className="text-sm leading-6 text-muted-foreground">Transfer ownership to another organization administrator. You keep administrator access, but only the new owner can transfer ownership again.</p>
 					{candidates.length ? <>
-						<label className="grid gap-2 text-sm font-medium">New owner<select className="h-9 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" value={targetId} onChange={(event) => setTargetId(event.target.value)} disabled={busy}><option value="">Choose an administrator</option>{candidates.map((admin) => <option key={admin.id} value={admin.id}>{admin.name}</option>)}</select></label>
+						<div className="grid gap-2 text-sm font-medium">
+							<label htmlFor="new-owner">New owner</label>
+							<Select
+								items={candidates.map((admin) => ({ value: admin.id, label: admin.name }))}
+								value={targetId || null}
+								disabled={busy}
+								onValueChange={(value) => setTargetId(value ?? "")}
+							>
+								<SelectTrigger id="new-owner" className="h-9 w-full">
+									<SelectValue placeholder="Choose an administrator" />
+								</SelectTrigger>
+								<SelectContent>
+									{candidates.map((admin) => (
+										<SelectItem key={admin.id} value={admin.id}>{admin.name}</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
 						<Button variant="outline" disabled={!target || busy} onClick={() => { setTransferError(null); setConfirmOpen(true); }}>Transfer ownership</Button>
 					</> : <p className="text-sm text-muted-foreground">There are no other eligible organization administrators yet.</p>}
 				</> : <p className="text-sm text-muted-foreground">Only the current owner can transfer ownership.</p>}

@@ -8,6 +8,13 @@ import { type FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import {
 	Sheet,
 	SheetContent,
 	SheetDescription,
@@ -20,8 +27,6 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { Taxonomies } from "@/lib/taxonomy";
 
-const selectClass =
-	"h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
 function byRank<T extends { readonly rank: number }>(items: readonly T[]) {
 	return [...items].sort((a, b) => a.rank - b.rank);
@@ -143,35 +148,41 @@ export function LogFeedback({
 							<div className="grid gap-4 sm:grid-cols-2">
 								<label htmlFor="log-category" className="grid gap-2 text-sm font-medium">
 									Category
-									<select
-										id="log-category"
-										className={selectClass}
+									<Select
+										items={categories}
 										value={category}
-										onChange={(event) => setCategory(event.target.value)}
-										required
+										onValueChange={(value) => value && setCategory(value)}
 									>
-										{categories.map((item) => (
-											<option key={item.value} value={item.value}>
-												{item.label}
-											</option>
-										))}
-									</select>
+										<SelectTrigger id="log-category" className="w-full">
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											{categories.map((item) => (
+												<SelectItem key={item.value} value={item.value}>
+													{item.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
 								</label>
 								<label htmlFor="log-priority" className="grid gap-2 text-sm font-medium">
 									Priority
-									<select
-										id="log-priority"
-										className={selectClass}
+									<Select
+										items={priorities}
 										value={priority}
-										onChange={(event) => setPriority(event.target.value)}
-										required
+										onValueChange={(value) => value && setPriority(value)}
 									>
-										{priorities.map((item) => (
-											<option key={item.value} value={item.value}>
-												{item.label}
-											</option>
-										))}
-									</select>
+										<SelectTrigger id="log-priority" className="w-full">
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											{priorities.map((item) => (
+												<SelectItem key={item.value} value={item.value}>
+													{item.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
 								</label>
 							</div>
 							<fieldset className="grid gap-3 rounded-lg border p-3">

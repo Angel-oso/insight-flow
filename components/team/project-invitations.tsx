@@ -14,6 +14,13 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -99,37 +106,41 @@ export function ProjectInvitations({ projectSlug }: { readonly projectSlug: stri
 							<div className="space-y-4 px-5 py-1">
 								<label className="grid gap-2 text-sm font-medium" htmlFor="invite-role">
 									Role
-									<select
-										id="invite-role"
-										value={roleId}
-										onChange={(event) =>
-											setRoleId(event.target.value as Id<"roles">)
-										}
-										className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+									<Select
+										items={(roleSettings?.roles ?? []).map((role) => ({ value: role.id, label: role.name }))}
+										value={roleId || null}
+										onValueChange={(value) => value && setRoleId(value as Id<"roles">)}
 									>
-										{roleSettings?.roles.map((role) => (
-											<option key={role.id} value={role.id}>
-												{role.name}
-											</option>
-										))}
-									</select>
+										<SelectTrigger id="invite-role" className="w-full capitalize">
+											<SelectValue placeholder="Choose a role" />
+										</SelectTrigger>
+										<SelectContent>
+											{roleSettings?.roles.map((role) => (
+												<SelectItem key={role.id} value={role.id} className="capitalize">
+													{role.name}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
 								</label>
 								<label className="grid gap-2 text-sm font-medium" htmlFor="invite-expiry">
 									Link expires in
-									<select
-										id="invite-expiry"
+									<Select
+										items={expiryOptions}
 										value={expiresInHours}
-										onChange={(event) =>
-											setExpiresInHours(Number(event.target.value) as 1 | 6 | 24)
-										}
-										className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+										onValueChange={(value) => value && setExpiresInHours(value)}
 									>
-										{expiryOptions.map((option) => (
-											<option key={option.value} value={option.value}>
-												{option.label}
-											</option>
-										))}
-									</select>
+										<SelectTrigger id="invite-expiry" className="w-full">
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											{expiryOptions.map((option) => (
+												<SelectItem key={option.value} value={option.value}>
+													{option.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
 								</label>
 								{error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
 							</div>
