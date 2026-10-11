@@ -860,7 +860,8 @@ test("member removal requires team management, never targets yourself, and keeps
 		}),
 	).rejects.toThrow("You cannot remove yourself from a project.");
 
-	// A custom role may manage the team, but it still cannot drop the last administrator.
+	// A custom role may manage the team, but it can never drop an administrator:
+	// the grant ceiling stops it before the last-administrator rule.
 	const role = await admin.mutation(api.projects.settings.createRole, {
 		projectSlug: "client-portal",
 		name: "Team lead",
@@ -876,7 +877,7 @@ test("member removal requires team management, never targets yourself, and keeps
 			projectSlug: "client-portal",
 			memberId: ids.admin,
 		}),
-	).rejects.toThrow("A project must keep at least one administrator.");
+	).rejects.toThrow("You cannot remove someone with more access than your own.");
 	expect(await countLinks()).toBe(before);
 });
 
@@ -976,4 +977,54 @@ test("manual logging requires triage rights, a live project, and valid values", 
 		"Archived projects cannot be edited.",
 	);
 	expect(await counts()).toEqual(before);
+});
+
+test("team managers cannot grant or remove more access than they hold", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	const admin = t.withIdentity({ subject: ids.admin });
+	const lead = t.withIdentity({ subject: ids.manager });
+	const role = await admin.mutation(api.projects.settings.createRole, {
+		projectSlug: "client-portal",
+		name: "Team lead",
+		permissionKeys: ["team.manage"],
+	});
+	await admin.mutation(api.team.mutations.setMemberRole, {
+		projectSlug: "client-portal",
+		memberId: ids.manager,
+		roleId: role.id,
+	});
+	// A second admin, so the last-administrator rule is not what blocks removal.
+	await admin.mutation(api.team.mutations.setMemberRole, {
+		projectSlug: "client-portal",
+		memberId: ids.member,
+		roleId: ids.adminRoleId,
+	});
+	const invitationCount = () =>
+		t.run(async (ctx) => (await ctx.db.query("projectInvitations").collect()).length);
+	const linkCount = () =>
+		t.run(async (ctx) => (await ctx.db.query("projectMembers").collect()).length);
+	const before = { invitations: await invitationCount(), links: await linkCount() };
+
+	await expect(
+		lead.action(api.invitations.actions.create, {
+			projectSlug: "client-portal",
+			roleId: ids.adminRoleId,
+			expiresInHours: 1,
+		}),
+	).rejects.toThrow("You cannot grant a role with more access than your own.");
+	await expect(
+		lead.mutation(api.team.mutations.removeMember, {
+			projectSlug: "client-portal",
+			memberId: ids.member,
+		}),
+	).rejects.toThrow("You cannot remove someone with more access than your own.");
+	expect({ invitations: await invitationCount(), links: await linkCount() }).toEqual(before);
+
+	// Within their own ceiling the lead can still invite.
+	const invitation = await lead.action(api.invitations.actions.create, {
+		projectSlug: "client-portal",
+		roleId: role.id,
+		expiresInHours: 1,
+	});
+	expect(invitation.token).toHaveLength(32);
 });

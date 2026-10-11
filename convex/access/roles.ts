@@ -113,3 +113,24 @@ async function resolveRoleAccess(
 		? { user, roleId: resolvedRoleId, role, permissions: [...permissions] }
 		: null;
 }
+
+/**
+ * Grant ceiling: nobody hands out, or takes away from someone else, access
+ * they do not hold themselves. Prevents a team-only role from minting admins.
+ */
+export function exceedsGrants(
+	candidate: readonly Capability[],
+	held: readonly Capability[],
+) {
+	return candidate.some((permission) => !held.includes(permission));
+}
+
+export async function rolePermissions(
+	ctx: QueryCtx | MutationCtx,
+	role: Doc<"roles">,
+): Promise<Capability[]> {
+	const permissions = await Promise.all(
+		role.permissionIds.map((permissionId) => ctx.db.get("permissions", permissionId)),
+	);
+	return permissions.flatMap((permission) => (permission ? [permission.key] : []));
+}

@@ -44,9 +44,14 @@ proyecto (`requireProject`) y comprueba la capacidad necesaria
 los personalizados solo en el proyecto que los define. Cambiar los permisos de
 un rol afecta a todos sus usuarios sin editar cada cuenta.
 
-Las únicas funciones anónimas son `intake.public.form`, que expone solo nombre,
-descripción, estado de recepción y categorías del proyecto, e
-`intake.public.submit`, que valida cada campo en el servidor.
+Las funciones anónimas son `intake.public.form`, que expone solo nombre,
+descripción, estado de recepción y categorías del proyecto;
+`intake.public.submit`, que valida cada campo en el servidor; e
+`invitations.queries.preview`, que solo responde a quien tiene el token secreto
+de la invitación.
+
+Tope de permisos: nadie puede invitar con un rol que tenga más permisos que
+los suyos, ni quitar del proyecto a alguien con más permisos que él.
 
 ## Tests
 

@@ -2,7 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 
 import { hasCapability } from "../../lib/auth/permissions";
-import { resolveProjectAccess } from "../access/roles";
+import { exceedsGrants, resolveProjectAccess, rolePermissions } from "../access/roles";
 import { internalMutation, mutation } from "../_generated/server";
 import schema from "../schema";
 
@@ -31,6 +31,9 @@ export const create = internalMutation({
 		const role = await ctx.db.get("roles", args.roleId);
 		if (!role || (role.projectId !== undefined && role.projectId !== project._id)) {
 			throw new ConvexError("This role is not available.");
+		}
+		if (exceedsGrants(await rolePermissions(ctx, role), creator.permissions)) {
+			throw new ConvexError("You cannot grant a role with more access than your own.");
 		}
 		if (args.expiresAt <= Date.now() || args.expiresInHours > 24) {
 			throw new ConvexError("Invitation links can expire in at most one day.");

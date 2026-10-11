@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 
-import { resolveProjectAccess } from "../access/roles";
+import { exceedsGrants, resolveProjectAccess } from "../access/roles";
 import { mutation } from "../_generated/server";
 import { requireCapability, requireProject, requireUserId } from "../feedback/access";
 import { getFinalStatuses } from "../taxonomies/lib";
@@ -77,6 +77,9 @@ export const removeMember = mutation({
 		if (!membership) throw new ConvexError("This person is not a project member.");
 
 		const target = await resolveProjectAccess(ctx, memberId, project._id);
+		if (target && exceedsGrants(target.permissions, access.permissions)) {
+			throw new ConvexError("You cannot remove someone with more access than your own.");
+		}
 		if (target?.role === "admin") {
 			const memberships = await ctx.db
 				.query("projectMembers")
