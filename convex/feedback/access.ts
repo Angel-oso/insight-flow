@@ -69,6 +69,8 @@ export function requireCapability(
  * Projects stay small in this release; the explicit cap keeps every reader
  * honest instead of silently truncating.
  */
+export const PROJECT_FEEDBACK_LIMIT = 200;
+
 export async function listProjectFeedback(
 	ctx: QueryCtx,
 	projectId: Id<"projects">,
@@ -77,8 +79,8 @@ export async function listProjectFeedback(
 		.query("feedback")
 		.withIndex("by_projectId_receivedAt", (q) => q.eq("projectId", projectId))
 		.order("desc")
-		.take(201);
-	if (items.length > 200)
+		.take(PROJECT_FEEDBACK_LIMIT + 1);
+	if (items.length > PROJECT_FEEDBACK_LIMIT)
 		throw new ConvexError(
 			"This workspace supports up to 200 feedback items per project.",
 		);

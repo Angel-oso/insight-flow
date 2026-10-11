@@ -2,6 +2,7 @@ import { ConvexError } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { getTaxonomies } from "../taxonomies/lib";
+import { PROJECT_FEEDBACK_LIMIT } from "./access";
 
 /** Shared, transactional creation for public intake and team logging. */
 export async function insertFeedback(ctx: MutationCtx, input: {
@@ -39,6 +40,15 @@ export async function insertFeedback(ctx: MutationCtx, input: {
 		?? [...priorities].sort((a, b) => a.rank - b.rank)[0]?.value;
 	if (status === undefined || priority === undefined)
 		throw new ConvexError("This project needs a status and priority before it can receive feedback.");
+
+	// Every project view reads at most PROJECT_FEEDBACK_LIMIT items, so intake
+	// stops there instead of letting anonymous traffic break the team's views.
+	const existing = await ctx.db
+		.query("feedback")
+		.withIndex("by_projectId_receivedAt", (q) => q.eq("projectId", input.project._id))
+		.take(PROJECT_FEEDBACK_LIMIT);
+	if (existing.length >= PROJECT_FEEDBACK_LIMIT)
+		throw new ConvexError("This project's inbox is full. Close or discard older feedback first.");
 
 	const now = Date.now();
 	const feedbackId = await ctx.db.insert("feedback", {

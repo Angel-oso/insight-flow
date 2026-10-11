@@ -114,3 +114,23 @@ test("exact trimmed input limits are accepted", async () => {
 	await t.mutation(submit, { ...valid, title: "a".repeat(120), description: "a".repeat(5000), senderName: "a".repeat(80), senderEmail: `${"a".repeat(242)}@example.com` });
 	expect((await stored(t)).feedback).toHaveLength(2);
 });
+
+test("a full inbox rejects new submissions so the team's views keep working", async () => {
+	const { t, projectId } = await fixture();
+	await t.run(async (ctx) => {
+		for (let i = 0; i < 200; i += 1) {
+			await ctx.db.insert("feedback", {
+				projectId, title: `Item ${i}`, description: "Existing feedback item.", category: "idea",
+				priority: "routine", status: "incoming", assigneeId: null, sender: null,
+				receivedAt: i, updatedAt: i,
+			});
+		}
+	});
+	const before = await stored(t);
+	await expect(t.mutation(submit, valid)).rejects.toThrow(
+		"This project's inbox is full. Close or discard older feedback first.",
+	);
+	const after = await stored(t);
+	expect(after.feedback).toHaveLength(before.feedback.length);
+	expect(after.activities).toHaveLength(before.activities.length);
+});

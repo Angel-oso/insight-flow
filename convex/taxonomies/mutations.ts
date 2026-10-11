@@ -166,6 +166,8 @@ export const removeOption = mutation({
 		if (projects.length > 100)
 			throw new ConvexError("Taxonomy removal supports up to 100 projects per organization.");
 		for (const project of projects) {
+			if (key === "priority" && project.defaultPriority === value)
+				throw new ConvexError("This priority is a project's default and cannot be removed.");
 			const used = key === "status"
 				? await ctx.db.query("feedback")
 					.withIndex("by_projectId_status", (q) => q.eq("projectId", project._id).eq("status", value)).take(1)

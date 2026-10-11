@@ -70,3 +70,21 @@ test("missing organization taxonomies ignore legacy docs and materialize on firs
 		expect(docs.find((doc) => doc.organizationId === undefined)?.items[0].label).toBe("Legacy");
 	});
 });
+
+test("a priority used as a project's default cannot be removed", async () => {
+	const t = convexTest(schema, modules);
+	const userId = await t.run((ctx) => ctx.db.insert("users", { name: "Owner" }));
+	const owner = t.withIdentity({ subject: userId });
+	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, { name: "Defaults" });
+	const option = await owner.mutation(api.taxonomies.mutations.createOption, {
+		projectSlug, key: "priority", label: "Someday", color: "#222222",
+	});
+	await owner.mutation(api.projects.settings.update, {
+		projectSlug, changes: { defaultPriority: option.value },
+	});
+	const before = await t.run((ctx) => ctx.db.query("taxonomies").collect());
+	await expect(owner.mutation(api.taxonomies.mutations.removeOption, {
+		projectSlug, key: "priority", value: option.value,
+	})).rejects.toThrow("This priority is a project's default and cannot be removed.");
+	expect(await t.run((ctx) => ctx.db.query("taxonomies").collect())).toEqual(before);
+});
