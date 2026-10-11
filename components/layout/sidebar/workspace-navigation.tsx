@@ -1,9 +1,12 @@
 "use client";
 
-import { Inbox, LayoutDashboard, Settings, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import {
+	isProjectSectionActive,
+	projectNavigation,
+} from "@/components/layout/project-navigation";
 import {
 	SidebarGroup,
 	SidebarGroupContent,
@@ -13,13 +16,6 @@ import {
 	SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { projectPath } from "@/lib/projects";
-
-const navigation = [
-	{ label: "Overview", icon: LayoutDashboard, section: "home" },
-	{ label: "Feedback", icon: Inbox, section: "feedback" },
-	{ label: "Team", icon: Users, section: "team" },
-	{ label: "Project settings", icon: Settings, section: "settings" },
-] as const;
 
 export function WorkspaceNavigation({
 	projectSlug,
@@ -33,9 +29,9 @@ export function WorkspaceNavigation({
 			<SidebarGroupLabel>Workspace</SidebarGroupLabel>
 			<SidebarGroupContent>
 				<SidebarMenu>
-					{navigation.map((item) => {
+					{projectNavigation.map((item) => {
 						const href = projectPath(projectSlug, item.section);
-						const isActive = href === pathname;
+						const isActive = isProjectSectionActive(pathname, href);
 
 						return (
 							<SidebarMenuItem key={item.label}>
