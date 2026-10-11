@@ -10,6 +10,7 @@
 
 import type * as access_roles from "../access/roles.js";
 import type * as auth from "../auth.js";
+import type * as dashboard_health from "../dashboard/health.js";
 import type * as dashboard_overview from "../dashboard/overview.js";
 import type * as feedback_access from "../feedback/access.js";
 import type * as feedback_create from "../feedback/create.js";
@@ -46,6 +47,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   "access/roles": typeof access_roles;
   auth: typeof auth;
+  "dashboard/health": typeof dashboard_health;
   "dashboard/overview": typeof dashboard_overview;
   "feedback/access": typeof feedback_access;
   "feedback/create": typeof feedback_create;
