@@ -30,16 +30,18 @@ scoring.
 
 ## The workflow, end to end
 
-1. **Sign up** (email/password or Google) and create a workspace. You become
-   its owner and administrator, and its first project is created for you.
+1. **Sign up** (email/password or Google), name your organization and its
+   first project. You become the organization's owner and administrator.
 2. **Share the public link** from *Project settings → Feedback intake*
    (`/f/<project>`). Anyone can submit feedback without an account.
 3. **Triage in the inbox**: search and filter, set category and priority,
    assign an owner, move the status, and leave internal notes. Feedback that
    arrives by phone or email can be logged manually by triagers.
-4. **Decide on the overview**: received vs. resolved trend, backlog
-   composition, the items needing intervention, and the project's health over
-   the last 7, 30, or 90 days.
+4. **Decide on the overviews**: each project shows its received vs. resolved
+   trend, backlog, items needing intervention, and health; members see their
+   own queue first, managers see workload by person. Administrators get an
+   organization overview with every project's health. Ranges: 7, 30, 90 days,
+   or custom dates.
 5. **Grow the team**: invite people with a one-time, expiring link and a
    project role, change roles, or remove members (their open work returns to
    the unassigned queue).
@@ -55,19 +57,34 @@ scoring.
 | `/f/[projectSlug]` | Public | Feedback form and confirmation |
 | `/invitations/[token]` | Signed in | Accept a project invitation |
 | `/home`, `/feedback`, `/team` | Signed in | Open your first project's section |
+| `/workspace` | Members | Projects list; organization overview for admins |
+| `/workspace/settings` | Admins | Rename the organization, transfer ownership |
 | `/projects/[slug]/home` | Members | Decision-ready project overview |
 | `/projects/[slug]/feedback` | Members | Inbox: queue, detail, triage, notes |
 | `/projects/[slug]/team` | Members | Workload, roles, invitations |
 | `/projects/[slug]/settings` | Members | Identity, intake link, taxonomies, roles, archive |
 
-Every page reads live data from the Convex backend; nothing is mocked.
+Every page reads live data from the Convex backend; nothing is mocked. On
+mobile the app uses a compact header and a bottom navigation bar.
 
-### Overview (`home`)
+### Organization workspace (`/workspace`)
+
+Every member sees the projects they can open, with status and open and
+critical counts. Administrators also get the organization metrics (received,
+open, critical, resolution rate), a project health table ranked by open
+feedback (cards on mobile), and recent activity across projects, including
+project creation. Quick actions create a project or open the inbox.
+
+### Project overview (`home`)
 
 Intervention brief, metric band (received, open, critical, resolution),
 feedback movement (received vs. resolved per day), backlog composition, a
-"Needs intervention" queue with deep links, and recent activity. Computed in
-one transactional query (`dashboard/overview:get`) for the selected range.
+"Needs intervention" queue with deep links, and recent activity. The view is
+role-aware: **My work** lists the caller's assigned items by priority and
+age, urgent items, items with new comments from others, and completed work in
+the range; members see it first and never see team comparisons, while
+managers and admins also get **Workload by team member**. The range (7, 30,
+90 days, or a custom from/to of up to 365 days) lives in the URL.
 
 ### Inbox (`feedback`)
 
@@ -118,10 +135,12 @@ app/
 ├── (auth)/login, signup           → authentication
 ├── f/[projectSlug]/               → public feedback form
 ├── invitations/[token]/           → accept an invitation
+├── workspace/                     → organization overview + settings
 └── (app)/projects/[projectSlug]/  → home · feedback · team · settings
 
 components/
 ├── landing/  intake/  invitations/
+├── workspace/        → organization overview, projects, settings
 ├── home/dashboard/   → overview panels + presentation model
 ├── feedback/         → inbox, detail, filters, manual logging
 ├── team/             → roster, workload, invitations
@@ -134,6 +153,7 @@ convex/
 ├── feedback/         → access helpers, queries, mutations, shared creation
 ├── intake/public.ts  → anonymous form read + submission
 ├── dashboard/        → overview aggregates
+├── organizations/    → organization overview, rename, ownership
 ├── projects/         → list, create, settings, roles, restore
 ├── team/             → roster, role changes, member removal
 ├── invitations/      → expiring one-time invitation links
@@ -174,8 +194,13 @@ roles ── permissions   (built-in admin/manager/member + per-project custom r
 - **Open**: any status not marked final (by default `Completed`, `Discarded`).
 - **Stale**: open with no activity for ≥ 7 days.
 - **Needs attention**: open and top priority, unassigned, or stale.
-- **Health**: `At risk` (≥ 1 open critical) · `Needs attention` (open backlog,
-  no criticals) · `Healthy` (nothing open).
+- **Resolved**: any final status (by default `Completed` and `Discarded`);
+  resolution rate = resolved / total.
+- **Health** (one rule for project and organization views): `At risk` (≥ 1
+  open item at the top priority, or ≥ 20 open items) · `Needs attention` (any
+  open backlog) · `Healthy` (nothing open).
+- **Archived projects** are read-only, including team, roles, and
+  invitations, until an administrator restores them.
 
 ---
 
@@ -183,7 +208,8 @@ roles ── permissions   (built-in admin/manager/member + per-project custom r
 
 | Role | Can |
 | --- | --- |
-| Admin | Everything: triage, assign, log, manage project, team, roles, taxonomies |
+| Owner | An admin who can also transfer organization ownership |
+| Admin | Everything: triage, assign, log, manage project, team, roles, taxonomies, organization |
 | Manager | Triage, assign, update, comment, and log feedback |
 | Member | Comment and update the status of feedback assigned to them |
 | Custom | Any combination, defined per project in settings |
@@ -216,7 +242,8 @@ Configure auth once on the deployment (see `.env.example` for details):
 `JWT_PRIVATE_KEY`, `JWKS`, `SITE_URL`, and optionally `AUTH_GOOGLE_ID` /
 `AUTH_GOOGLE_SECRET` for Google sign-in.
 
-Open `http://localhost:3000`, create an account, and create your workspace.
+Open `http://localhost:3000`, create an account, and name your organization
+and first project.
 Open *Project settings*, copy the public link, and submit some feedback to
 see it arrive in the inbox and the overview.
 

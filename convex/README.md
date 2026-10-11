@@ -8,11 +8,12 @@ aquí; no hay datos simulados ni seed.
 
 | Módulo | Funciones públicas |
 | --- | --- |
-| `setup/` | `queries.status` (gate del shell), `mutations.createWorkspace` |
+| `setup/` | `queries.status` (gate del shell), `mutations.createWorkspace` (organización + primer proyecto) |
+| `organizations/` | `queries.mine/overview/settings`, `mutations.rename/transferOwnership` |
 | `projects/` | `queries.list`, `mutations.create`, `settings.get/update/restore/access`, roles por proyecto (`roles`, `createRole`, `deleteRole`) |
 | `feedback/` | `queries.workspace/detail`, `mutations.update/create/addComment` |
 | `intake/` | `public.form` y `public.submit` (anónimas) |
-| `dashboard/` | `overview.get` (rango de 7, 30 o 90 días) |
+| `dashboard/` | `overview.get` (ventana `from`/`to` de hasta 365 días, vistas por rol) |
 | `team/` | `queries.get`, `mutations.setMemberRole/removeMember` |
 | `invitations/` | `actions.create`, `mutations.accept`, `queries.preview` |
 | `taxonomies/` | `queries.list`, `mutations.createOption/updateOption/removeOption` |
@@ -44,11 +45,17 @@ proyecto (`requireProject`) y comprueba la capacidad necesaria
 los personalizados solo en el proyecto que los define. Cambiar los permisos de
 un rol afecta a todos sus usuarios sin editar cada cuenta.
 
-Las funciones anónimas son `intake.public.form`, que expone solo nombre,
-descripción, estado de recepción y categorías del proyecto;
-`intake.public.submit`, que valida cada campo en el servidor; e
-`invitations.queries.preview`, que solo responde a quien tiene el token secreto
-de la invitación.
+Las únicas funciones anónimas son `intake.public.form`, que expone solo
+nombre, descripción, estado de recepción y categorías del proyecto, e
+`intake.public.submit`, que valida cada campo en el servidor.
+`invitations.queries.preview` exige sesión y no lee el reloj: el cliente
+deriva la caducidad de `expiresAt`.
+
+Las métricas de organización solo llegan a quien tiene `organization.manage`
+en su membresía de organización; el resto recibe únicamente sus proyectos. La
+carga por persona del overview de proyecto solo llega a quien tiene
+`feedback.assign`. Un proyecto archivado rechaza cambios de equipo, roles e
+invitaciones hasta que se restaura.
 
 Tope de permisos: nadie puede invitar con un rol que tenga más permisos que
 los suyos, ni quitar del proyecto a alguien con más permisos que él.
@@ -66,6 +73,10 @@ acceso. Si una base de datos tiene usuarios creados con ellos, ejecuta una vez
   capacidades por rol, invitaciones, gestión de miembros y archivado.
 - `taxonomies/organization.test.ts`: taxonomías por organización.
 - `intake/public.test.ts`: formulario público y validación de envíos.
+- `dashboard/*.test.ts`: overview por rol, ventanas de fechas y regla de salud.
+- `organizations/workspace.test.ts`: overview de organización, ajustes y
+  onboarding.
+- `projects/archived.test.ts`: bloqueo de proyectos archivados e invitaciones.
 
 Con el servidor en marcha (`npx convex dev`), el deployment de `.env.local`
 corre en `http://127.0.0.1:3210`.
