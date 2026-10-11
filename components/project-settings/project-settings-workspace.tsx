@@ -40,6 +40,7 @@ import type { Doc } from "@/convex/_generated/dataModel";
 import type { Project } from "@/lib/projects";
 import { useTaxonomies, type TaxonomyItem } from "@/lib/taxonomy";
 import { TaxonomyManager } from "./taxonomy-manager";
+import { PublicLink } from "./public-link";
 import {
 	useProjectSettingsData,
 	useProjectSettingsWrites,
@@ -310,6 +311,10 @@ export function ProjectSettingsWorkspace({
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="divide-y px-5 py-5 sm:px-6">
+					<PublicLink
+						slug={data.project.slug}
+						accepting={data.project.status === "Active" && data.project.inboxEnabled}
+					/>
 					<SettingToggle
 						label="Accept feedback"
 						description="Keep the project inbox available to receive new feedback. Pausing it preserves existing history."
