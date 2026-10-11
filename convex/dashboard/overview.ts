@@ -131,9 +131,9 @@ export const get = query({
 
 		// Dynamic taxonomy rules: final states close the backlog, and the
 		// highest priority rank defines the critical lane.
-		const taxonomies = await getTaxonomies(ctx);
-		const finals = await getFinalStatuses(ctx);
-		const priorityRank = await getPriorityRanks(ctx);
+		const taxonomies = await getTaxonomies(ctx, project.organizationId);
+		const finals = await getFinalStatuses(ctx, project.organizationId);
+		const priorityRank = await getPriorityRanks(ctx, project.organizationId);
 		const rankOf = (priority: string) => priorityRank.get(priority) ?? 0;
 
 		const inRange = (timestamp: number, start: number, end: number) =>

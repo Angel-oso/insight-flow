@@ -8,16 +8,6 @@ const roleRank: Record<Role, number> = {
 	member: 1,
 };
 
-/** Legacy single-workspace resolver retained for unscoped admin utilities. */
-export async function resolveUserAccess(
-	ctx: QueryCtx | MutationCtx,
-	userId: Id<"users">,
-) {
-	const user = await ctx.db.get("users", userId);
-	if (!user?.organizationId) return null;
-	return resolveOrganizationAccess(ctx, userId, user.organizationId);
-}
-
 /** Resolve one organization membership; legacy user fields remain during migration. */
 export async function resolveOrganizationAccess(
 	ctx: QueryCtx | MutationCtx,

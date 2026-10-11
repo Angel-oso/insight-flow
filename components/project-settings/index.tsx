@@ -25,6 +25,7 @@ export function ProjectSettings({
 			<ProjectSettingsWorkspace
 				key={project.slug}
 				canManage={canManage}
+				canManageTaxonomies={canManageRoles}
 				project={project}
 			/>
 			{canManageRoles ? <RoleManager projectSlug={project.slug} disabled={!canManage} /> : null}

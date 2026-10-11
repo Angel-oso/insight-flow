@@ -1,32 +1,31 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, type MutationCtx } from "../_generated/server";
-import { resolveUserAccess } from "../access/roles";
-import { requireCapability } from "../feedback/access";
+import { requireCapability, requireProject } from "../feedback/access";
 import {
 	checkedColor,
 	checkedLabel,
 	checkedRank,
+	ensureTaxonomies,
 	slugify,
 	taxonomyKeyValidator,
 } from "./lib";
 
-/**
- * Global taxonomy writes need a real administrator: the caller must be
- * authenticated and have organization management permission.
- * Taxonomies are shared display metadata, so an org administrator may curate them.
- */
-async function requireTaxonomyAdmin(ctx: MutationCtx) {
-	const userId = await getAuthUserId(ctx);
-	if (!userId) throw new ConvexError("Sign in to access this workspace.");
-	const access = await resolveUserAccess(ctx, userId);
-	if (!access?.user.organizationId)
-		throw new ConvexError("Only a workspace administrator can do this.");
+/** Authorize against the project before materializing organization defaults. */
+async function requireTaxonomyAdmin(ctx: MutationCtx, projectSlug: string) {
+	const { project, access } = await requireProject(ctx, projectSlug);
 	requireCapability(access.permissions, "organization.manage");
+	const docs = await ctx.db.query("taxonomies")
+		.withIndex("by_organizationId_key", (q) => q.eq("organizationId", project.organizationId))
+		.take(3);
+	// Backfill only during initialization, not on every edit: removed defaults
+	// must stay removed when the next option is changed.
+	if (docs.length < 3) await ensureTaxonomies(ctx, project.organizationId);
+	return project.organizationId;
 }
 
 export const createOption = mutation({
 	args: {
+		projectSlug: v.string(),
 		key: taxonomyKeyValidator,
 		label: v.string(),
 		color: v.string(),
@@ -36,12 +35,12 @@ export const createOption = mutation({
 	},
 	returns: v.object({ value: v.string() }),
 	handler: async (ctx, args) => {
-		await requireTaxonomyAdmin(ctx);
+		const organizationId = await requireTaxonomyAdmin(ctx, args.projectSlug);
 		const label = checkedLabel(args.label);
 		const color = checkedColor(args.color);
 		const doc = await ctx.db
 			.query("taxonomies")
-			.withIndex("by_key", (q) => q.eq("key", args.key))
+			.withIndex("by_organizationId_key", (q) => q.eq("organizationId", organizationId).eq("key", args.key))
 			.unique();
 		if (!doc) throw new ConvexError("Taxonomy not found.");
 		const base = slugify(label);
@@ -79,6 +78,7 @@ export const createOption = mutation({
 
 export const updateOption = mutation({
 	args: {
+		projectSlug: v.string(),
 		key: taxonomyKeyValidator,
 		value: v.string(),
 		label: v.optional(v.string()),
@@ -89,10 +89,10 @@ export const updateOption = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		await requireTaxonomyAdmin(ctx);
+		const organizationId = await requireTaxonomyAdmin(ctx, args.projectSlug);
 		const doc = await ctx.db
 			.query("taxonomies")
-			.withIndex("by_key", (q) => q.eq("key", args.key))
+			.withIndex("by_organizationId_key", (q) => q.eq("organizationId", organizationId).eq("key", args.key))
 			.unique();
 		if (!doc) throw new ConvexError("Taxonomy not found.");
 		const index = doc.items.findIndex((item) => item.value === args.value);
@@ -145,39 +145,38 @@ export const updateOption = mutation({
 });
 
 export const removeOption = mutation({
-	args: { key: taxonomyKeyValidator, value: v.string() },
+	args: { projectSlug: v.string(), key: taxonomyKeyValidator, value: v.string() },
 	returns: v.null(),
-	handler: async (ctx, { key, value }) => {
-		await requireTaxonomyAdmin(ctx);
+	handler: async (ctx, { projectSlug, key, value }) => {
+		const organizationId = await requireTaxonomyAdmin(ctx, projectSlug);
 		const doc = await ctx.db
 			.query("taxonomies")
-			.withIndex("by_key", (q) => q.eq("key", key))
+			.withIndex("by_organizationId_key", (q) => q.eq("organizationId", organizationId).eq("key", key))
 			.unique();
 		if (!doc) throw new ConvexError("Taxonomy not found.");
 		if (!doc.items.some((item) => item.value === value))
 			throw new ConvexError("Option not found.");
 		if (doc.items.length <= 1)
 			throw new ConvexError("A taxonomy needs at least one option.");
-		// Block while any feedback row still references the value.
-		const used =
-			key === "status"
-				? await ctx.db
-						.query("feedback")
-						.withIndex("by_status", (q) => q.eq("status", value))
-						.take(1)
+		// Check every project in this organization, including those the caller cannot enter.
+		const projects = await ctx.db
+			.query("projects")
+			.withIndex("by_organizationId", (q) => q.eq("organizationId", organizationId))
+			.take(101);
+		if (projects.length > 100)
+			throw new ConvexError("Taxonomy removal supports up to 100 projects per organization.");
+		for (const project of projects) {
+			const used = key === "status"
+				? await ctx.db.query("feedback")
+					.withIndex("by_projectId_status", (q) => q.eq("projectId", project._id).eq("status", value)).take(1)
 				: key === "category"
-					? await ctx.db
-							.query("feedback")
-							.withIndex("by_category", (q) => q.eq("category", value))
-							.take(1)
-					: await ctx.db
-							.query("feedback")
-							.withIndex("by_priority", (q) => q.eq("priority", value))
-							.take(1);
-		if (used.length > 0)
-			throw new ConvexError(
-				"This option is still used by feedback and cannot be removed.",
-			);
+					? await ctx.db.query("feedback")
+						.withIndex("by_projectId_category", (q) => q.eq("projectId", project._id).eq("category", value)).take(1)
+					: await ctx.db.query("feedback")
+						.withIndex("by_projectId_priority", (q) => q.eq("projectId", project._id).eq("priority", value)).take(1);
+			if (used.length > 0)
+				throw new ConvexError("This option is still used by feedback and cannot be removed.");
+		}
 		await ctx.db.patch("taxonomies", doc._id, {
 			items: doc.items.filter((item) => item.value !== value),
 		});

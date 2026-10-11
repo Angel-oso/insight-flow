@@ -38,7 +38,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import type { Doc } from "@/convex/_generated/dataModel";
 import type { Project } from "@/lib/projects";
-import { useTaxonomies } from "@/lib/taxonomy";
+import { useTaxonomies, type TaxonomyItem } from "@/lib/taxonomy";
 import { TaxonomyManager } from "./taxonomy-manager";
 import {
 	useProjectSettingsData,
@@ -109,7 +109,7 @@ function PriorityMenu({
 	disabled,
 }: {
 	readonly priority: Priority;
-	readonly priorities: readonly string[];
+	readonly priorities: readonly Pick<TaxonomyItem, "value" | "label">[];
 	readonly onPriorityChange: (priority: Priority) => void;
 	readonly disabled?: boolean;
 }) {
@@ -118,7 +118,7 @@ function PriorityMenu({
 			<DropdownMenuTrigger
 				render={
 					<Button type="button" variant="outline" disabled={disabled}>
-						{priority}
+						{priorities.find((candidate) => candidate.value === priority)?.label ?? priority}
 						<ChevronDown data-icon="inline-end" />
 					</Button>
 				}
@@ -128,11 +128,11 @@ function PriorityMenu({
 					<DropdownMenuLabel>Default priority</DropdownMenuLabel>
 					{priorities.map((candidate) => (
 						<DropdownMenuItem
-							key={candidate}
-							onClick={() => onPriorityChange(candidate as Priority)}
+							key={candidate.value}
+							onClick={() => onPriorityChange(candidate.value)}
 						>
-							{candidate}
-							{candidate === priority ? (
+							{candidate.label}
+							{candidate.value === priority ? (
 								<Check className="ml-auto size-3.5" />
 							) : null}
 						</DropdownMenuItem>
@@ -145,14 +145,16 @@ function PriorityMenu({
 
 export function ProjectSettingsWorkspace({
 	canManage,
+	canManageTaxonomies,
 	project,
 }: {
 	readonly canManage: boolean;
+	readonly canManageTaxonomies: boolean;
 	readonly project: Project;
 }) {
 	const data = useProjectSettingsData(project.slug);
 	const { pending, error, saveSettings } = useProjectSettingsWrites(project.slug);
-	const taxonomies = useTaxonomies();
+	const taxonomies = useTaxonomies(project.slug);
 	const [draft, setDraft] = useState<SettingsState | null>(null);
 	const [hasSaved, setHasSaved] = useState(false);
 	const [isArchiveOpen, setIsArchiveOpen] = useState(false);
@@ -170,8 +172,8 @@ export function ProjectSettingsWorkspace({
 	const canEdit = canManage && !isArchived && !pending;
 	// Database priorities once loaded; static mirror only for the first paint.
 	const priorityOptions =
-		taxonomies?.priorities.map((item) => item.label) ??
-		["Low", "Medium", "High", "Critical"];
+		taxonomies?.priorities ??
+		["Low", "Medium", "High", "Critical"].map((value) => ({ value, label: value }));
 
 	const updateSettings = (update: Partial<SettingsState>) => {
 		setHasSaved(false);
@@ -334,7 +336,7 @@ export function ProjectSettingsWorkspace({
 				</CardContent>
 			</Card>
 
-			<TaxonomyManager disabled={!canEdit} />
+			<TaxonomyManager projectSlug={project.slug} disabled={!canManageTaxonomies || isArchived || pending} />
 
 			<Card className="gap-0 py-0 shadow-none ring-destructive/20">
 				<CardHeader className="border-b px-5 py-5 sm:px-6">

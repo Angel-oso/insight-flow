@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values";
 
 import { internal } from "../_generated/api";
 import { mutation } from "../_generated/server";
+import { ensureTaxonomies, getTaxonomies } from "../taxonomies/lib";
 
 function slugFromName(name: string) {
 	return name
@@ -59,6 +60,13 @@ export const createWorkspace = mutation({
 			slug,
 			ownerId: userId,
 		});
+		await ensureTaxonomies(ctx, organizationId);
+		const { priorities } = await getTaxonomies(ctx, organizationId);
+		const defaultPriority =
+			priorities.find((priority) => priority.value === "Medium") ??
+			priorities.reduce((lowest, priority) =>
+				priority.rank < lowest.rank ? priority : lowest,
+			);
 		const projectId = await ctx.db.insert("projects", {
 			organizationId,
 			name,
@@ -66,7 +74,7 @@ export const createWorkspace = mutation({
 			description: "The first project in this workspace.",
 			status: "Active",
 			inboxEnabled: true,
-			defaultPriority: "Medium",
+			defaultPriority: defaultPriority.value,
 			criticalAlerts: false,
 			weeklyDigest: false,
 			updatedAt: now,

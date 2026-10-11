@@ -52,7 +52,7 @@ export const create = mutation({
 		if (existing) throw new ConvexError("A project with this name already exists.");
 
 		const [{ priorities }, projectRole] = await Promise.all([
-			getTaxonomies(ctx),
+			getTaxonomies(ctx, currentProject.organizationId),
 			ctx.db
 				.query("roles")
 				.withIndex("by_name", (q) => q.eq("name", access.role))

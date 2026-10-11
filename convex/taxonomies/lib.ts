@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import type { Id } from "../_generated/dataModel";
 import schema from "../schema";
 
 const taxonomyItem = schema.tables.taxonomies.validator.fields.items.element;
@@ -66,14 +67,15 @@ export const taxonomiesValidator = v.object({
 });
 
 /** Insert any missing taxonomy doc and backfill new item fields. Safe to run repeatedly. */
-export async function ensureTaxonomies(ctx: MutationCtx) {
+export async function ensureTaxonomies(ctx: MutationCtx, organizationId: Id<"organizations">) {
 	for (const key of TAXONOMY_KEYS) {
 		const existing = await ctx.db
 			.query("taxonomies")
-			.withIndex("by_key", (q) => q.eq("key", key))
+			.withIndex("by_organizationId_key", (q) => q.eq("organizationId", organizationId).eq("key", key))
 			.unique();
 		if (!existing) {
 			await ctx.db.insert("taxonomies", {
+				organizationId,
 				key,
 				label: TAXONOMY_DEFAULTS[key].label,
 				items: TAXONOMY_DEFAULTS[key].items,
@@ -121,12 +123,12 @@ export type Taxonomies = {
 };
 
 /** Read all three taxonomies; fall back to defaults for docs never seeded. */
-export async function getTaxonomies(ctx: QueryCtx): Promise<Taxonomies> {
+export async function getTaxonomies(ctx: QueryCtx, organizationId: Id<"organizations">): Promise<Taxonomies> {
 	const docs = await Promise.all(
 		TAXONOMY_KEYS.map((key) =>
 			ctx.db
 				.query("taxonomies")
-				.withIndex("by_key", (q) => q.eq("key", key))
+				.withIndex("by_organizationId_key", (q) => q.eq("organizationId", organizationId).eq("key", key))
 				.unique(),
 		),
 	);
@@ -141,8 +143,8 @@ export async function getTaxonomies(ctx: QueryCtx): Promise<Taxonomies> {
 }
 
 /** Statuses that close the backlog. Falls back to the seeded finals. */
-export async function getFinalStatuses(ctx: QueryCtx): Promise<Set<string>> {
-	const { statuses } = await getTaxonomies(ctx);
+export async function getFinalStatuses(ctx: QueryCtx, organizationId: Id<"organizations">): Promise<Set<string>> {
+	const { statuses } = await getTaxonomies(ctx, organizationId);
 	return new Set(
 		statuses
 			.filter(
@@ -155,20 +157,20 @@ export async function getFinalStatuses(ctx: QueryCtx): Promise<Set<string>> {
 }
 
 /** Highest priority rank. Severity rules derive from it, not literals. */
-export async function getMaxPriorityRank(ctx: QueryCtx): Promise<number> {
-	const { priorities } = await getTaxonomies(ctx);
+export async function getMaxPriorityRank(ctx: QueryCtx, organizationId: Id<"organizations">): Promise<number> {
+	const { priorities } = await getTaxonomies(ctx, organizationId);
 	return Math.max(0, ...priorities.map((item) => item.rank));
 }
 
 /** Lowest status rank, used as the "awaiting triage" lane. */
-export async function getMinStatusRank(ctx: QueryCtx): Promise<number> {
-	const { statuses } = await getTaxonomies(ctx);
+export async function getMinStatusRank(ctx: QueryCtx, organizationId: Id<"organizations">): Promise<number> {
+	const { statuses } = await getTaxonomies(ctx, organizationId);
 	return Math.min(...statuses.map((item) => item.rank));
 }
 
 /** Priority value → rank lookup for severity rules. */
-export async function getPriorityRanks(ctx: QueryCtx): Promise<Map<string, number>> {
-	const { priorities } = await getTaxonomies(ctx);
+export async function getPriorityRanks(ctx: QueryCtx, organizationId: Id<"organizations">): Promise<Map<string, number>> {
+	const { priorities } = await getTaxonomies(ctx, organizationId);
 	return new Map(priorities.map((item) => [item.value, item.rank]));
 }
 

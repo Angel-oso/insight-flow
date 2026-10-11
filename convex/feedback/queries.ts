@@ -45,7 +45,7 @@ export const workspace = query({
 				}),
 			)
 		).filter((assignee): assignee is Doc<"users"> => assignee !== null);
-		const taxonomies = await getTaxonomies(ctx);
+		const taxonomies = await getTaxonomies(ctx, project.organizationId);
 		return {
 			project,
 			role: access.role,

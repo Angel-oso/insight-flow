@@ -110,8 +110,8 @@ function useTaxonomyWrites() {
 	return { pendingKey, error, run, createOption, updateOption, removeOption };
 }
 
-export function TaxonomyManager({ disabled }: { readonly disabled: boolean }) {
-	const taxonomies = useTaxonomies();
+export function TaxonomyManager({ disabled, projectSlug }: { readonly disabled: boolean; readonly projectSlug: string }) {
+	const taxonomies = useTaxonomies(projectSlug);
 	const { pendingKey, error, run, createOption, updateOption, removeOption } =
 		useTaxonomyWrites();
 	const [drafts, setDrafts] = useState<Drafts | null>(null);
@@ -183,6 +183,7 @@ export function TaxonomyManager({ disabled }: { readonly disabled: boolean }) {
 				if (row.value === null) {
 					if (row.label.trim().length === 0) continue;
 					const created = await createOption({
+						projectSlug,
 						key,
 						label: row.label,
 						color: row.color,
@@ -206,7 +207,7 @@ export function TaxonomyManager({ disabled }: { readonly disabled: boolean }) {
 				if (key === "status" && row.isFinal !== before.isFinal)
 					patch.isFinal = row.isFinal;
 				if (Object.keys(patch).length > 0) {
-					await updateOption({ key, value: row.value, ...patch });
+					await updateOption({ projectSlug, key, value: row.value, ...patch });
 				}
 			}
 			setDrafts({ ...rows, [key]: nextRows });
@@ -228,7 +229,7 @@ export function TaxonomyManager({ disabled }: { readonly disabled: boolean }) {
 			return;
 		}
 		void run(async () => {
-			await removeOption({ key, value: row.value as string });
+			await removeOption({ projectSlug, key, value: row.value as string });
 			// Drop the row locally; the server refetch arrives silently.
 			setDrafts({
 				...rows,
@@ -255,8 +256,8 @@ export function TaxonomyManager({ disabled }: { readonly disabled: boolean }) {
 										Workflow values
 									</span>
 									<span className="mt-1 block text-sm text-muted-foreground">
-										Shared across all projects. Names, colors, and ranks apply
-										everywhere instantly; option keys never change once created.
+										Shared across this workspace&apos;s projects. Names, colors, and ranks apply
+										instantly; option keys never change once created.
 									</span>
 								</span>
 								<ChevronDown
@@ -401,7 +402,7 @@ export function TaxonomyManager({ disabled }: { readonly disabled: boolean }) {
 							</Button>
 						{savedKey === group.key ? (
 							<span role="status" className="text-xs text-muted-foreground">
-								Saved · Live everywhere.
+								Saved · Live across this workspace.
 							</span>
 						) : null}
 					</div>

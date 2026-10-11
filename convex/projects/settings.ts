@@ -106,7 +106,7 @@ export const update = mutation({
 			changes.defaultPriority !== undefined &&
 			changes.defaultPriority !== project.defaultPriority
 		) {
-			const { priorities } = await getTaxonomies(ctx);
+			const { priorities } = await getTaxonomies(ctx, project.organizationId);
 			if (!priorities.some((entry) => entry.value === changes.defaultPriority)) {
 				throw new ConvexError(`Unknown priority: ${changes.defaultPriority}.`);
 			}

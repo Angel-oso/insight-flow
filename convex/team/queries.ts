@@ -55,8 +55,8 @@ export const get = query({
 
 		// Project-level backlog for the unassigned count (bounded, shared cap).
 		const items = await listProjectFeedback(ctx, projectId);
-		const finals = await getFinalStatuses(ctx);
-		const priorityRank = await getPriorityRanks(ctx);
+		const finals = await getFinalStatuses(ctx, project.organizationId);
+		const priorityRank = await getPriorityRanks(ctx, project.organizationId);
 		const rankOf = (priority: string) => priorityRank.get(priority) ?? 0;
 		let unassigned = 0;
 		let critical = 0;
@@ -128,7 +128,7 @@ export const get = query({
 
 		const coordinatorCount = members.filter((member) => member.role !== "member").length;
 		const openAssigned = members.reduce((total, member) => total + member.openAssigned, 0);
-		const { priorities } = await getTaxonomies(ctx);
+		const { priorities } = await getTaxonomies(ctx, project.organizationId);
 		const lanePriority = priorities.find((entry) => entry.rank === laneRank);
 		const criticalLabel = lanePriority?.label ?? null;
 		const criticalColor = lanePriority?.color ?? null;

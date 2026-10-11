@@ -35,7 +35,7 @@ export const update = mutation({
 				throw new ConvexError("Only the assigned member can update this item.");
 		}
 		// Values are dynamic: they must exist in the taxonomies table.
-		const taxonomies = await getTaxonomies(ctx);
+		const taxonomies = await getTaxonomies(ctx, project.organizationId);
 		const known = {
 			category: new Set(taxonomies.categories.map((entry) => entry.value)),
 			priority: new Set(taxonomies.priorities.map((entry) => entry.value)),
@@ -92,7 +92,7 @@ export const update = mutation({
 			});
 		}
 		if (!changed) return null;
-		const finals = await getFinalStatuses(ctx);
+		const finals = await getFinalStatuses(ctx, project.organizationId);
 		await ctx.db.patch("feedback", feedbackId, {
 			...changes,
 			updatedAt: now,

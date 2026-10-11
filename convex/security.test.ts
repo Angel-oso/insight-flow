@@ -122,7 +122,7 @@ async function seedTestWorkspace() {
 			label: string,
 			items: { value: string; label: string; rank: number; tone: "info" | "warning" | "primary" | "success" | "danger" | "muted"; isFinal?: boolean }[],
 		) => {
-			await ctx.db.insert("taxonomies", { key, label, items });
+			await ctx.db.insert("taxonomies", { organizationId, key, label, items });
 		};
 		await taxonomy("status", "Status", [
 			{ value: "New", label: "New", rank: 0, tone: "info" },
@@ -185,7 +185,7 @@ test("anonymous callers are rejected on every workspace function", async () => {
 	await expect(
 		t.query(api.projects.settings.access, { projectSlug: "client-portal" }),
 	).resolves.toBeNull();
-	await expect(t.query(api.taxonomies.queries.list, {})).rejects.toThrow();
+	await expect(t.query(api.taxonomies.queries.list, { projectSlug: "client-portal" })).rejects.toThrow();
 	await expect(t.query(api.users.queries.current, {})).resolves.toBeNull();
 	await expect(t.query(api.setup.queries.status, {})).resolves.toMatchObject({
 		authenticated: false,
@@ -207,6 +207,7 @@ test("anonymous callers are rejected on every workspace function", async () => {
 	).rejects.toThrow();
 	await expect(
 		t.mutation(api.taxonomies.mutations.createOption, {
+			projectSlug: "client-portal",
 			key: "status",
 			label: "Nope",
 			color: "#ffffff",
@@ -394,6 +395,9 @@ test("an invitation grants only its project role and expires before acceptance",
 	await expect(
 		recipient.query(api.team.queries.get, { projectSlug: "client-portal" }),
 	).resolves.toMatchObject({ project: { slug: "client-portal" } });
+	await expect(
+		recipient.query(api.taxonomies.queries.list, { projectSlug: "client-portal" }),
+	).resolves.toMatchObject({ statuses: expect.arrayContaining([expect.objectContaining({ value: "New" })]) });
 	await expect(
 		recipient.query(api.feedback.queries.workspace, { projectSlug: "academy" }),
 	).rejects.toThrow(/access denied/i);
@@ -613,18 +617,21 @@ test("taxonomy writes require a real administrator", async () => {
 
 	await expect(
 		member.mutation(api.taxonomies.mutations.createOption, {
+			projectSlug: "client-portal",
 			key: "status",
 			label: "Sneaky",
 			color: "#111111",
 		}),
 	).rejects.toThrow();
 	const created = await admin.mutation(api.taxonomies.mutations.createOption, {
+		projectSlug: "client-portal",
 		key: "status",
 		label: "Verified",
 		color: "#111111",
 	});
 	expect(created.value).toBe("verified");
 	await admin.mutation(api.taxonomies.mutations.removeOption, {
+		projectSlug: "client-portal",
 		key: "status",
 		value: "verified",
 	});
@@ -670,6 +677,107 @@ test("a user receives the union of permissions from assigned roles", async () =>
 		projectSlug: "client-portal",
 		changes: { description: "Allowed by the second role" },
 	});
+});
+
+test("new workspace taxonomy reads do not require legacy user organizationId", async () => {
+	const t = convexTest(schema, modules);
+	const userId = await t.run((ctx) => ctx.db.insert("users", { name: "New owner" }));
+	const owner = t.withIdentity({ subject: userId });
+	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, { name: "Fresh Org" });
+	const taxonomies = await owner.query(api.taxonomies.queries.list, { projectSlug });
+	expect(taxonomies.statuses.map((item) => item.value)).toEqual([
+		"New", "In review", "Planned", "In progress", "Completed", "Discarded",
+	]);
+	expect(taxonomies.categories.map((item) => item.value)).toEqual([
+		"Bug", "Feature request", "Improvement", "Question", "Other",
+	]);
+	expect(taxonomies.priorities.map((item) => item.value)).toEqual(["Low", "Medium", "High", "Critical"]);
+	await t.run(async (ctx) => {
+		expect((await ctx.db.get("users", userId))?.organizationId).toBeUndefined();
+		const project = await ctx.db.query("projects").withIndex("by_slug", (q) => q.eq("slug", projectSlug)).unique();
+		const docs = await ctx.db.query("taxonomies").collect();
+		expect(docs.filter((doc) => doc.organizationId === project?.organizationId)).toHaveLength(3);
+	});
+});
+
+async function seedSecondOrganization() {
+	const { t, ids } = await seedTestWorkspace();
+	const userId = await t.run((ctx) => ctx.db.insert("users", { name: "Other owner" }));
+	const owner = t.withIdentity({ subject: userId });
+	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, { name: "Other Org" });
+	const recipientId = await t.run(async (ctx) => {
+		const recipientId = await ctx.db.insert("users", { name: "Other member" });
+		const project = await ctx.db.query("projects").withIndex("by_slug", (q) => q.eq("slug", projectSlug)).unique();
+		await ctx.db.insert("organizationMembers", {
+			organizationId: project!.organizationId, userId: recipientId, roleIds: [ids.memberRoleId],
+		});
+		await ctx.db.insert("projectMembers", {
+			projectId: project!._id, userId: recipientId, roleId: ids.memberRoleId, joinedAt: Date.now(),
+		});
+		return recipientId;
+	});
+	return { t, ids, owner, projectSlug, otherMember: t.withIdentity({ subject: recipientId }) };
+}
+
+test("taxonomy label edits stay in their organization and foreign admins cannot edit", async () => {
+	const { t, ids, projectSlug, otherMember } = await seedSecondOrganization();
+	const admin = t.withIdentity({ subject: ids.admin });
+	const before = await otherMember.query(api.taxonomies.queries.list, { projectSlug });
+	await admin.mutation(api.taxonomies.mutations.updateOption, {
+		projectSlug: "client-portal", key: "status", value: "New", label: "Incoming",
+	});
+	expect((await admin.query(api.taxonomies.queries.list, { projectSlug: "client-portal" })).statuses[0].label).toBe("Incoming");
+	expect((await admin.query(api.taxonomies.queries.list, { projectSlug: "academy" })).statuses[0].label).toBe("Incoming");
+	await expect(admin.query(api.taxonomies.queries.list, { projectSlug })).rejects.toThrow(/denied/i);
+	expect(await otherMember.query(api.taxonomies.queries.list, { projectSlug })).toEqual(before);
+	const docsBefore = await t.run((ctx) => ctx.db.query("taxonomies").collect());
+	await expect(admin.mutation(api.taxonomies.mutations.updateOption, {
+		projectSlug, key: "status", value: "New", label: "Hijacked",
+	})).rejects.toThrow(/denied/i);
+	expect(await t.run((ctx) => ctx.db.query("taxonomies").collect())).toEqual(docsBefore);
+});
+
+test("taxonomy creation rejects managers without changing docs", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	const before = await t.run((ctx) => ctx.db.query("taxonomies").collect());
+	await expect(t.withIdentity({ subject: ids.manager }).mutation(api.taxonomies.mutations.createOption, {
+		projectSlug: "client-portal", key: "category", label: "Unauthorized", color: "#111111",
+	})).rejects.toThrow(/cannot make this change/i);
+	expect(await t.run((ctx) => ctx.db.query("taxonomies").collect())).toEqual(before);
+});
+
+test.each([
+	["status", "Completed"], ["category", "Question"], ["priority", "Low"],
+] as const)("removing %s checks feedback across only the same organization", async (key, value) => {
+	const { t, ids, projectSlug } = await seedSecondOrganization();
+	const admin = t.withIdentity({ subject: ids.admin });
+	await t.run(async (ctx) => {
+		const sameOrgProject = await ctx.db.query("projects").withIndex("by_slug", (q) => q.eq("slug", "academy")).unique();
+		const otherProject = await ctx.db.query("projects").withIndex("by_slug", (q) => q.eq("slug", projectSlug)).unique();
+		const item = await ctx.db.get("feedback", ids.itemId);
+		await ctx.db.patch("feedback", ids.itemId, { projectId: sameOrgProject!._id, [key]: value });
+		const { _id, _creationTime, ...fields } = item!;
+		void _id; void _creationTime;
+		await ctx.db.insert("feedback", { ...fields, projectId: otherProject!._id, [key]: value });
+	});
+	const before = await t.run((ctx) => ctx.db.query("taxonomies").collect());
+	await expect(admin.mutation(api.taxonomies.mutations.removeOption, {
+		projectSlug: "client-portal", key, value,
+	})).rejects.toThrow(/still used/i);
+	expect(await t.run((ctx) => ctx.db.query("taxonomies").collect())).toEqual(before);
+	await t.run((ctx) => ctx.db.patch("feedback", ids.itemId, {
+		[key]: key === "status" ? "New" : key === "category" ? "Bug" : "High",
+	}));
+	await admin.mutation(api.taxonomies.mutations.removeOption, { projectSlug: "client-portal", key, value });
+	const result = await admin.query(api.taxonomies.queries.list, { projectSlug: "client-portal" });
+	const items = key === "status" ? result.statuses : key === "category" ? result.categories : result.priorities;
+	expect(items.some((item) => item.value === value)).toBe(false);
+	await admin.mutation(api.taxonomies.mutations.updateOption, {
+		projectSlug: "client-portal", key: "status", value: "New", label: "Incoming",
+	});
+	const afterEdit = await admin.query(api.taxonomies.queries.list, { projectSlug: "client-portal" });
+	const remaining = key === "status" ? afterEdit.statuses : key === "category" ? afterEdit.categories : afterEdit.priorities;
+	expect(remaining.some((item) => item.value === value)).toBe(false);
 });
 
 test("an administrator assigned to another organization cannot enter this project", async () => {

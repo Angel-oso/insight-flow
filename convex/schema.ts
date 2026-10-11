@@ -110,11 +110,9 @@ export default defineSchema({
 		.index("by_projectId_receivedAt", ["projectId", "receivedAt"])
 		.index("by_projectId_completedAt", ["projectId", "completedAt"])
 		.index("by_projectId_status", ["projectId", "status"])
-		.index("by_projectId_assigneeId", ["projectId", "assigneeId"])
-		// Global value lookups for taxonomy management (usage checks).
-		.index("by_status", ["status"])
-		.index("by_category", ["category"])
-		.index("by_priority", ["priority"]),
+		.index("by_projectId_category", ["projectId", "category"])
+		.index("by_projectId_priority", ["projectId", "priority"])
+		.index("by_projectId_assigneeId", ["projectId", "assigneeId"]),
 	comments: defineTable({
 		feedbackId: v.id("feedback"),
 		authorId: v.id("users"),
@@ -137,9 +135,9 @@ export default defineSchema({
 		.index("by_projectId_createdAt", ["projectId", "createdAt"])
 		.index("by_feedbackId_createdAt", ["feedbackId", "createdAt"]),
 	// Display metadata for the feedback enums (text, rank/level, tone, chart
-	// token). Stored as JSON docs — one per taxonomy — so every surface reads
-	// the same labels and colors. Validation stays on the schema unions.
+	// token). One doc per organization and key; legacy unscoped docs are ignored.
 	taxonomies: defineTable({
+		organizationId: v.optional(v.id("organizations")),
 		key: v.union(
 			v.literal("status"),
 			v.literal("category"),
@@ -168,5 +166,5 @@ export default defineSchema({
 				description: v.optional(v.string()),
 			}),
 		),
-	}).index("by_key", ["key"]),
+	}).index("by_organizationId_key", ["organizationId", "key"]),
 });
