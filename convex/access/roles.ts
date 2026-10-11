@@ -8,27 +8,109 @@ const roleRank: Record<Role, number> = {
 	member: 1,
 };
 
-/** Resolve persisted role grants for a user. Broken references deny access. */
+/** Legacy single-workspace resolver retained for unscoped admin utilities. */
 export async function resolveUserAccess(
 	ctx: QueryCtx | MutationCtx,
 	userId: Id<"users">,
+) {
+	const user = await ctx.db.get("users", userId);
+	if (!user?.organizationId) return null;
+	return resolveOrganizationAccess(ctx, userId, user.organizationId);
+}
+
+/** Resolve one organization membership; legacy user fields remain during migration. */
+export async function resolveOrganizationAccess(
+	ctx: QueryCtx | MutationCtx,
+	userId: Id<"users">,
+	organizationId: Id<"organizations">,
 ): Promise<{
 	user: Doc<"users">;
-	role: Role;
+	roleId: Id<"roles">;
+	role: string;
 	permissions: Capability[];
 } | null> {
-	const user = await ctx.db.get("users", userId);
-	if (!user?.organizationId || !user.roleIds?.length) return null;
-	const organization = await ctx.db.get("organizations", user.organizationId);
-	if (!organization) return null;
+	const [user, organization, membership] = await Promise.all([
+		ctx.db.get("users", userId),
+		ctx.db.get("organizations", organizationId),
+		ctx.db
+			.query("organizationMembers")
+			.withIndex("by_organizationId_userId", (q) =>
+				q.eq("organizationId", organizationId).eq("userId", userId),
+			)
+			.unique(),
+	]);
+	if (!user || !organization) return null;
+	const roleIds = membership?.roleIds ??
+		(user.organizationId === organizationId ? user.roleIds ?? [] : []);
+	return resolveRoleAccess(ctx, user, roleIds);
+}
 
+/** Resolve role grants for one project membership, falling back for legacy links. */
+export async function resolveProjectAccess(
+	ctx: QueryCtx | MutationCtx,
+	userId: Id<"users">,
+	projectId: Id<"projects">,
+): Promise<{
+	user: Doc<"users">;
+	roleId: Id<"roles">;
+	role: string;
+	permissions: Capability[];
+} | null> {
+	const project = await ctx.db.get("projects", projectId);
+	if (!project) return null;
+	const link = await ctx.db
+		.query("projectMembers")
+		.withIndex("by_projectId_userId", (q) =>
+			q.eq("projectId", projectId).eq("userId", userId),
+		)
+		.unique();
+	if (!link) return null;
+	const organizationAccess = await resolveOrganizationAccess(
+		ctx,
+		userId,
+		project.organizationId,
+	);
+	if (!organizationAccess) return null;
+	return resolveRoleAccess(
+		ctx,
+		organizationAccess.user,
+		link.roleId ? [link.roleId] : organizationAccess.user.roleIds ?? [],
+		projectId,
+	);
+}
+
+async function resolveRoleAccess(
+	ctx: QueryCtx | MutationCtx,
+	user: Doc<"users">,
+	roleIds: readonly Id<"roles">[],
+ 	projectId?: Id<"projects">,
+): Promise<{
+	user: Doc<"users">;
+	roleId: Id<"roles">;
+	role: string;
+	permissions: Capability[];
+} | null> {
+	if (!roleIds.length) return null;
 	const permissions = new Set<Capability>();
-	let role: Role | null = null;
-	for (const roleId of user.roleIds) {
+	let role: string | null = null;
+	let resolvedRoleId: Id<"roles"> | null = null;
+	for (const roleId of roleIds) {
 		const assignedRole = await ctx.db.get("roles", roleId);
 		if (!assignedRole) return null;
-		if (role === null || roleRank[assignedRole.name] > roleRank[role]) {
+		// Built-in roles have no projectId and apply anywhere; custom roles
+		// only grant access inside the project that owns them.
+		if (
+			assignedRole.projectId !== undefined &&
+			assignedRole.projectId !== projectId
+		)
+			return null;
+		if (
+			role === null ||
+			(roleRank[assignedRole.name as Role] ?? 0) >
+				(roleRank[role as Role] ?? 0)
+		) {
 			role = assignedRole.name;
+			resolvedRoleId = assignedRole._id;
 		}
 		for (const permissionId of assignedRole.permissionIds) {
 			const permission = await ctx.db.get("permissions", permissionId);
@@ -37,5 +119,7 @@ export async function resolveUserAccess(
 		}
 	}
 
-	return role ? { user, role, permissions: [...permissions] } : null;
+	return role && resolvedRoleId
+		? { user, roleId: resolvedRoleId, role, permissions: [...permissions] }
+		: null;
 }
