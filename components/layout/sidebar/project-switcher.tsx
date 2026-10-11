@@ -26,6 +26,7 @@ import {
 	SheetTitle,
 } from "@/components/ui/sheet";
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 import { api } from "@/convex/_generated/api";
 import { type Project, projectPath } from "@/lib/projects";
 
@@ -47,6 +48,28 @@ function getCurrentSection(pathname: string) {
 	return section === "feedback" || section === "team" || section === "settings"
 		? section
 		: "home";
+}
+
+/** A project's initial on a tinted tile: tells projects apart at a glance. */
+function ProjectMonogram({
+	name,
+	className,
+}: {
+	readonly name?: string;
+	readonly className?: string;
+}) {
+	const initial = name?.trim().charAt(0).toUpperCase();
+	return (
+		<span
+			aria-hidden="true"
+			className={cn(
+				"grid size-7 shrink-0 place-items-center rounded-md bg-sidebar-primary/15 font-heading text-sm font-semibold text-sidebar-primary ring-1 ring-sidebar-primary/20 group-data-[collapsible=icon]:size-8",
+				className,
+			)}
+		>
+			{initial ?? <FolderKanban className="size-4" />}
+		</span>
+	);
 }
 
 export function ProjectSwitcher({ project }: { readonly project?: Project }) {
@@ -99,27 +122,20 @@ export function ProjectSwitcher({ project }: { readonly project?: Project }) {
 						render={
 							<SidebarMenuButton
 								size="lg"
-								tooltip="Change project"
-								className="aria-expanded:bg-sidebar-accent aria-expanded:text-sidebar-accent-foreground"
+								tooltip={project ? `${project.name} · change project` : "Choose a project"}
+								className="h-11 gap-2.5 border border-sidebar-border bg-sidebar px-2 shadow-[0_1px_2px_rgb(0_0_0/0.04)] hover:border-sidebar-ring/40 aria-expanded:bg-sidebar-accent aria-expanded:text-sidebar-accent-foreground group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:shadow-none"
 							/>
 						}
 					>
-						<span className="grid aspect-square size-8 place-items-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-							<FolderKanban className="size-4" />
+						<ProjectMonogram name={project?.name} />
+						<span className="min-w-0 flex-1 truncate text-left font-heading text-sm font-semibold tracking-[-0.02em]">
+							{project?.name ?? "Choose a project"}
 						</span>
-						<span className="grid min-w-0 flex-1 text-left text-sm leading-tight">
-							<span className="truncate font-heading font-semibold tracking-[-0.02em]">
-								{project?.name ?? "Select a project"}
-							</span>
-							<span className="truncate text-xs text-sidebar-foreground/70">
-								InsightFlow
-							</span>
-						</span>
-						<ChevronsUpDown className="size-4" />
+						<ChevronsUpDown className="size-4 text-sidebar-foreground/50" />
 					</DropdownMenuTrigger>
 					<DropdownMenuContent className="min-w-64 rounded-lg" align="start">
 						<DropdownMenuGroup>
-							<DropdownMenuLabel>Projects</DropdownMenuLabel>
+							<DropdownMenuLabel>Switch project</DropdownMenuLabel>
 							{availableProjects.length === 0 ? (
 								<DropdownMenuItem disabled>
 									{projects === undefined ? "Loading projects…" : "No projects available"}
@@ -131,9 +147,7 @@ export function ProjectSwitcher({ project }: { readonly project?: Project }) {
 									onClick={() => selectProject(candidate.slug)}
 									className="gap-2 p-2"
 								>
-									<span className="grid size-6 place-items-center rounded-md border bg-muted/50">
-										<FolderKanban className="size-3.5" />
-									</span>
+									<ProjectMonogram name={candidate.name} className="size-6 text-[11px]" />
 									<span className="min-w-0 flex-1">
 										<span className="block truncate font-medium">
 											{candidate.name}

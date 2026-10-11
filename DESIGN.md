@@ -246,7 +246,16 @@ The form language is gently geometric: compact controls use the large control ra
 
 ### Navigation
 
-Desktop navigation is a quiet cool sidebar with one soft indigo current-state row, concise group labels, and clear keyboard focus. It collapses to an icon rail with tooltips and reopens through the persistent header trigger. Mobile uses that same trigger to open an off-canvas sheet, keeping destinations and account access consistent without duplicating navigation.
+The sidebar reads top to bottom as product → organization → project → person:
+
+- **Header:** the logo at full size (28px tile) and the wordmark, with the collapse toggle on the right.
+- **Organization group:** labelled with the organization's name; Workspace and, for administrators only, Organization settings.
+- **Project group:** the project switcher (a bordered control with the project's initial on a tinted tile) sits directly above that project's sections: Overview, Feedback, Team, Settings.
+- **Footer:** the signed-in person (round avatar; people are round, projects are square).
+
+Rows are 36px with 16px muted icons (`components/layout/sidebar/sidebar-item.ts`). The current row carries three cues, never color alone: the `sidebar-accent` background, a primary-colored icon, and medium weight. Collapsed, it becomes a 48px icon rail: logo, a short rule between the organization and project tiers, the project initial, section icons, and the avatar; every row keeps its tooltip. The logo is the expand control on the rail: on hover or keyboard focus the mark gives way to the expand icon with an "Expand sidebar" tooltip (`components/layout/sidebar/sidebar-brand.tsx`). On mobile there is no bottom bar: the compact header's trigger opens the same content as an off-canvas sheet.
+
+In dark mode the sidebar tokens come from the app palette (blue-gray `oklch(0.205 0.014 264)` with the violet primary), not shadcn's neutral grays.
 
 ### Decision Brief
 

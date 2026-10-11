@@ -58,9 +58,10 @@ export function NavUser() {
 	const [confirmPassword, setConfirmPassword] = useState("");
 	const [accountError, setAccountError] = useState<string | null>(null);
 	const [accountNotice, setAccountNotice] = useState<string | null>(null);
-	const name = profile?.name ?? "Your account";
-	const email = profile?.email ?? "No email address";
-	const userInitials = initials(name);
+	// undefined while loading; null only when the session has no profile.
+	const name = profile === undefined ? "Loading account…" : (profile?.name ?? "Your account");
+	const email = profile === undefined ? "" : (profile?.email ?? "No email address");
+	const userInitials = profile ? initials(name) : "";
 
 	async function handleSignOut() {
 		setIsSigningOut(true);
@@ -132,18 +133,18 @@ export function NavUser() {
 							/>
 						}
 					>
-						<Avatar className="size-8 rounded-lg">
-							<AvatarFallback className="rounded-lg bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground">
+						<Avatar className="size-8 rounded-full">
+							<AvatarFallback className="rounded-full bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground ring-1 ring-sidebar-border">
 								{userInitials}
 							</AvatarFallback>
 						</Avatar>
 						<span className="grid min-w-0 flex-1 text-left text-sm leading-tight">
 							<span className="truncate font-medium">{name}</span>
-							<span className="truncate text-xs text-sidebar-foreground/70">
+							<span className="truncate text-xs text-sidebar-foreground/60">
 								{email}
 							</span>
 						</span>
-						<ChevronsUpDown className="ml-auto size-4" />
+						<ChevronsUpDown className="ml-auto size-4 text-sidebar-foreground/50" />
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
 						className="min-w-56 rounded-lg"
@@ -154,8 +155,8 @@ export function NavUser() {
 						<DropdownMenuGroup>
 							<DropdownMenuLabel className="p-0 font-normal">
 								<div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-									<Avatar className="size-8 rounded-lg">
-										<AvatarFallback className="rounded-lg bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground">
+									<Avatar className="size-8 rounded-full">
+										<AvatarFallback className="rounded-full bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground">
 										{userInitials}
 										</AvatarFallback>
 									</Avatar>

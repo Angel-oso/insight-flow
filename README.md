@@ -65,7 +65,7 @@ scoring.
 | `/projects/[slug]/settings` | Members | Identity, intake link, taxonomies, roles, archive |
 
 Every page reads live data from the Convex backend; nothing is mocked. On
-mobile the app uses a compact header and a bottom navigation bar.
+mobile the app uses a compact header that opens the navigation as a side sheet.
 
 ### Organization workspace (`/workspace`)
 
