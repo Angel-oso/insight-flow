@@ -281,3 +281,50 @@ Charts, attention queues, activity, and project health share aligned headers, co
 - Don't use red, amber, green, blue, or cyan as decoration detached from operational meaning.
 - Don't squeeze desktop tables, sidebars, or multi-column controls into the mobile viewport.
 - Don't introduce highly pill-shaped controls, oversized radii, gradients, or ornamental effects that weaken the calm briefing character.
+
+## Logo
+
+The mark is an indigo tile (`oklch(0.49 0.2 276)`, the app's primary) holding three white bars that narrow into one: scattered feedback funnelled into a decision. It stays the same in light and dark themes.
+
+- Component: `components/brand/logo.tsx` (`LogoMark`, and `Logo` with the wordmark, which inherits the surrounding font).
+- Files: `app/icon.svg` (favicon) and `public/logo.svg` (same geometry, hex `#4949ce`).
+- Used in: the landing (navigation, closing section, footer), the sign-in and sign-up panel, the sidebar header (links to the workspace and collapses to the mark), the mobile app header, the no-workspace onboarding, invitations, and the public form's "Powered by InsightFlow".
+- Pass `title` to `LogoMark` when it stands alone; omit it when the wordmark follows.
+
+## Public Landing (`/`)
+
+The landing takes its layout language from nextjs.org and vercel.com (framed hero, Geist display type, bento grid, product windows) and renders it in the app's own palette. Everything is scoped under the `.landing` class in `app/globals.css`, and every `lp-*` token points at an app token, so the landing follows the visitor's light or dark theme exactly like the app.
+
+### Palette
+
+| Token | Maps to | Role |
+| --- | --- | --- |
+| `lp-bg` | `dashboard-canvas` | Page ground: warm canvas in light, deep blue-gray in dark |
+| `lp-fg` | `foreground` | Text |
+| `lp-muted` | `muted-foreground` | Body copy |
+| `lp-subtle` | blue-gray `oklch(0.62 0.022 264)` | Quiet half of two-tone headings, labels |
+| `lp-line` / `lp-line-strong` | `border` / a darker blue-gray hairline | Hairlines, window borders |
+| `lp-surface` / `lp-surface-2` | `card` / `muted` | Cards and mockup windows / active rows |
+| `lp-accent` (+ `-fg`, `-soft`) | `dashboard-primary` (+ `dashboard-primary-soft`) | Primary buttons, call-to-action card, chart bars, workflow pulse, glow |
+
+Status, priority, and health chips inside mockups reuse the app's `dashboard-*` tokens.
+
+### Type
+
+Geist (`font-display`, loaded as `--font-geist-sans`) for everything; Geist Mono only for real data (the public link path, "Example data" labels).
+
+- Display: 44 → 72 → 84px, weight 600, tracking -0.04em, leading 1.02.
+- Section headings: 30 → 40–44px, weight 600, tracking -0.035em; often two-tone (`lp-fg` then `lp-subtle`).
+- Card titles 17px / 600 / -0.02em; body 14–20px in `lp-muted`.
+- Mockup text runs 10–13px to read as a scaled-down product window.
+
+### Components
+
+- **Buttons:** pill (`rounded-full`, 44–48px) solid `lp-accent` primary first with a soft indigo shadow, outline secondary on `lp-surface`; nav buttons are 32px `rounded-md`.
+- **Mock window:** `rounded-xl`, `lp-line-strong` border, one soft offset shadow, a 40px title bar with the window title and a mono "Example data" label. Every mockup is illustrative and says so.
+- **Hero frame:** hairline rules with crosshair corner marks around the title, as on nextjs.org; a blurred `--lp-glow` light behind the live inbox.
+- **Bento grid:** `lp-surface` cards with hairline borders, three illustrated (drawn in code), five text-only, one indigo call-to-action card.
+
+### Motion
+
+One authored moment: in the hero inbox a new item arrives every 3.4s (blur and slide in, then a fading highlight) while older items advance through the lifecycle and the counters and health chip recompute. A light pulse travels the workflow line. Both pause off-screen, stop when the tab is hidden, and are disabled under `prefers-reduced-motion`.
