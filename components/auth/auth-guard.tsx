@@ -54,6 +54,7 @@ function NoWorkspaceAccess({
 	const router = useRouter();
 	const [isSigningOut, setIsSigningOut] = useState(false);
 	const [workspaceName, setWorkspaceName] = useState("");
+	const [projectName, setProjectName] = useState("");
 	const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
 	const [createError, setCreateError] = useState<string | null>(null);
 
@@ -71,7 +72,7 @@ function NoWorkspaceAccess({
 		setIsCreatingWorkspace(true);
 		setCreateError(null);
 		try {
-			const workspace = await createWorkspace({ name: workspaceName });
+			const workspace = await createWorkspace({ name: workspaceName, projectName });
 			router.replace(`/projects/${workspace.projectSlug}/home`);
 		} catch (cause) {
 			setCreateError(
@@ -99,15 +100,21 @@ function NoWorkspaceAccess({
 					{canCreateWorkspace ? (
 						<form className="mt-3 grid gap-3" onSubmit={handleCreateWorkspace}>
 							<label htmlFor="workspace-name" className="grid gap-2 text-sm font-medium">
-								Workspace name
+								Organization name
 								<Input
 									id="workspace-name"
 									value={workspaceName}
 									onChange={(event) => setWorkspaceName(event.target.value)}
 									placeholder="e.g. Acme product team"
 									autoFocus
+									maxLength={80}
+									disabled={isCreatingWorkspace}
 									required
 								/>
+							</label>
+							<label htmlFor="first-project-name" className="grid gap-2 text-sm font-medium">
+								First project name
+								<Input id="first-project-name" value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="e.g. Client portal" required maxLength={80} disabled={isCreatingWorkspace} />
 							</label>
 							{createError ? (
 								<p role="alert" className="text-sm text-destructive">

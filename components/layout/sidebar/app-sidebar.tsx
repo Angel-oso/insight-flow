@@ -1,3 +1,4 @@
+import { OrganizationNavigation } from "@/components/layout/sidebar/organization-navigation";
 import { NavUser } from "@/components/layout/sidebar/nav-user";
 import { ProjectSwitcher } from "@/components/layout/sidebar/project-switcher";
 import { WorkspaceNavigation } from "@/components/layout/sidebar/workspace-navigation";
@@ -26,6 +27,7 @@ export function AppSidebar({
 			</SidebarHeader>
 
 			<SidebarContent>
+				<OrganizationNavigation projectSlug={project?.slug} />
 				{project ? <WorkspaceNavigation projectSlug={project.slug} /> : null}
 			</SidebarContent>
 

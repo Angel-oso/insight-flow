@@ -26,7 +26,7 @@ export function WorkspaceNavigation({
 
 	return (
 		<SidebarGroup>
-			<SidebarGroupLabel>Workspace</SidebarGroupLabel>
+			<SidebarGroupLabel>Project</SidebarGroupLabel>
 			<SidebarGroupContent>
 				<SidebarMenu>
 					{projectNavigation.map((item) => {

@@ -49,6 +49,8 @@ export type OverviewActivityTone = "primary" | "neutral" | "success" | "warning"
 
 export type OverviewActivity = {
 	readonly id: Id<"activities">;
+	readonly feedbackId?: Id<"feedback"> | null;
+	readonly projectSlug?: string;
 	readonly actor: string;
 	readonly initials: string;
 	readonly action: string;
@@ -85,7 +87,7 @@ export type PresentedOverview = {
 	readonly footerUpdated: string;
 };
 
-function relativeTime(timestamp: number, now: number) {
+export function relativeTime(timestamp: number, now: number) {
 	const minutes = Math.max(0, Math.floor((now - timestamp) / 60000));
 	if (minutes < 1) return "Just now";
 	if (minutes < 60) return `${minutes} min ago`;
@@ -229,6 +231,8 @@ export function presentOverview(
 		}),
 		activities: data.activities.map((activity) => ({
 			id: activity.id,
+			feedbackId: activity.feedbackId,
+			projectSlug: activity.projectSlug,
 			actor: activity.actor,
 			initials: activity.initials,
 			action: activity.action,

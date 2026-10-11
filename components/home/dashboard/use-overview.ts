@@ -6,7 +6,7 @@ import { api } from "@/convex/_generated/api";
 import { presentOverview } from "./model";
 import { overviewWindow, utcDate, type OverviewRange } from "./date-window";
 
-function useOverviewClock() {
+export function useOverviewClock() {
 	const [now, setNow] = useState(() => Date.now());
 	useEffect(() => {
 		const timer = setInterval(() => setNow(Date.now()), 60000);

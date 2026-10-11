@@ -59,7 +59,7 @@ export function ProjectSwitcher({ project }: { readonly project?: Project }) {
 	const [description, setDescription] = useState("");
 	const [createError, setCreateError] = useState<string | null>(null);
 	const [isCreating, setIsCreating] = useState(false);
-	const section = getCurrentSection(pathname);
+	const section = project ? getCurrentSection(pathname) : "home";
 
 	const availableProjects = projects ?? [];
 
