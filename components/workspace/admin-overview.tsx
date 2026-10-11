@@ -3,7 +3,7 @@ import type { FunctionReturnType } from "convex/server";
 import type { api } from "@/convex/_generated/api";
 import { ActivityFeed } from "@/components/home/dashboard/activity-feed";
 import { MetricSummary } from "@/components/home/dashboard/metric-summary";
-import { relativeTime, type OverviewMetric } from "@/components/home/dashboard/model";
+import { presentPeriodMetrics, relativeTime, type OverviewMetric } from "@/components/home/dashboard/model";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { projectPath } from "@/lib/projects";
 
@@ -21,14 +21,15 @@ function HealthBadge({ health }: { readonly health: keyof typeof healthStyles })
 
 export function AdminOverview({ admin, projects, now }: { readonly admin: Admin; readonly projects: Overview["projects"]; readonly now: number }) {
 	const { metrics, health } = admin;
-	const completed = health.reduce((sum, project) => sum + project.completed, 0);
-	const resolution = metrics.total ? `${Math.round(completed / metrics.total * 100)}%` : "—";
-	const delta = metrics.receivedPrevious ? `${((metrics.received - metrics.receivedPrevious) / metrics.receivedPrevious * 100).toFixed(1)}%` : "—";
+	const period = presentPeriodMetrics(metrics);
+	// Health box: all-time resolved / all feedback, like the project health box.
+	const resolved = health.reduce((sum, project) => sum + project.completed, 0);
+	const resolution = metrics.total ? `${Math.round((resolved / metrics.total) * 100)}%` : "—";
 	const presentedMetrics: OverviewMetric[] = [
-		{ label: "Feedback received", value: String(metrics.received), change: delta, context: "vs. previous period", tone: "primary" },
+		{ label: "Feedback received", value: String(metrics.received), change: period.receivedChange, context: "vs. previous period", tone: "primary" },
 		{ label: "Open feedback", value: String(metrics.open), change: "Current backlog", context: "across all projects", tone: "info" },
 		{ label: "Critical items", value: String(metrics.critical), change: "Top priority", context: "open items requiring intervention", tone: "danger" },
-		{ label: "Resolution rate", value: resolution, change: `${metrics.completedInRange} completed this period`, context: `· ${metrics.completedPrevious} previously`, tone: "success" },
+		{ label: "Resolution rate", value: period.resolutionRate, change: period.resolutionChange, context: "vs. previous period", tone: "success" },
 	];
 	const overallHealth = health.some((project) => project.health === "At risk") ? "At risk" : metrics.open > 0 ? "Needs attention" : "Healthy";
 	const latestActivityAt = Math.max(0, ...health.map((project) => project.latestActivityAt));
@@ -41,7 +42,7 @@ export function AdminOverview({ admin, projects, now }: { readonly admin: Admin;
 		</section>
 		<MetricSummary metrics={presentedMetrics} health={{ name: "Organization", received: metrics.received, open: metrics.open, critical: metrics.critical, resolution, activity: latestActivityAt ? relativeTime(latestActivityAt, now) : "No activity yet", health: overallHealth }} />
 		<Card className="gap-0 rounded-xl py-0 shadow-none ring-foreground/8">
-			<CardHeader className="border-b px-5 py-5 sm:px-6"><h2 className="font-heading text-lg font-semibold tracking-[-0.025em]">Project health</h2><p className="text-sm text-muted-foreground">Ranked by open feedback. Received counts use the selected period; resolution is completed / all feedback.</p></CardHeader>
+			<CardHeader className="border-b px-5 py-5 sm:px-6"><h2 className="font-heading text-lg font-semibold tracking-[-0.025em]">Project health</h2><p className="text-sm text-muted-foreground">Ranked by open feedback. Received counts use the selected period; resolution is resolved (any final status) / all feedback.</p></CardHeader>
 			<CardContent className="p-0">
 				<div className="hidden overflow-x-auto md:block">
 					<table className="w-full text-left text-sm">

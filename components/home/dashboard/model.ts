@@ -100,6 +100,36 @@ function percentChange(current: number, previous: number) {
 	return ((current - previous) / previous) * 100;
 }
 
+/**
+ * Period metrics shared by the project and organization overviews so both
+ * screens report the same numbers: resolution rate = items resolved in the
+ * period / items received in the period, compared with the previous period.
+ */
+export function presentPeriodMetrics(metrics: {
+	readonly received: number;
+	readonly receivedPrevious: number;
+	readonly completedInRange: number;
+	readonly completedPrevious: number;
+}) {
+	const receivedDelta = percentChange(metrics.received, metrics.receivedPrevious);
+	const currentRate =
+		metrics.received > 0 ? metrics.completedInRange / metrics.received : null;
+	const previousRate =
+		metrics.receivedPrevious > 0
+			? metrics.completedPrevious / metrics.receivedPrevious
+			: null;
+	const rateDeltaPts =
+		currentRate !== null && previousRate !== null
+			? (currentRate - previousRate) * 100
+			: null;
+	return {
+		receivedChange: receivedDelta === null ? "—" : signed(receivedDelta, 1, "%"),
+		resolutionRate: currentRate === null ? "—" : `${Math.round(currentRate * 100)}%`,
+		resolutionChange: rateDeltaPts === null ? "—" : signed(rateDeltaPts, 1, " pts"),
+		rateDeltaPts,
+	};
+}
+
 function signed(value: number, digits: number, unit: string) {
 	const sign = value > 0 ? "+" : value < 0 ? "−" : "";
 	return `${sign}${Math.abs(value).toFixed(digits)}${unit}`;
@@ -122,23 +152,13 @@ export function presentOverview(
 	);
 	const criticalLabel = metrics.criticalLabel ?? "Critical";
 
-	const receivedDelta = percentChange(metrics.received, metrics.receivedPrevious);
-	const currentRate =
-		metrics.received > 0 ? metrics.completedInRange / metrics.received : null;
-	const previousRate =
-		metrics.receivedPrevious > 0
-			? metrics.completedPrevious / metrics.receivedPrevious
-			: null;
-	const rateDeltaPts =
-		currentRate !== null && previousRate !== null
-			? (currentRate - previousRate) * 100
-			: null;
+	const periodMetrics = presentPeriodMetrics(metrics);
 
 	const presentedMetrics: readonly OverviewMetric[] = [
 		{
 			label: "Feedback received",
 			value: String(metrics.received),
-			change: receivedDelta === null ? "—" : signed(receivedDelta, 1, "%"),
+			change: periodMetrics.receivedChange,
 			context: "vs. previous period",
 			tone: "primary",
 		},
@@ -162,8 +182,8 @@ export function presentOverview(
 		},
 		{
 			label: "Resolution rate",
-			value: currentRate === null ? "—" : `${Math.round(currentRate * 100)}%`,
-			change: rateDeltaPts === null ? "—" : signed(rateDeltaPts, 1, " pts"),
+			value: periodMetrics.resolutionRate,
+			change: periodMetrics.resolutionChange,
 			context: "vs. previous period",
 			tone: "success",
 		},
@@ -183,6 +203,7 @@ export function presentOverview(
 		.filter((_, index) => index % tickStep === 0)
 		.map((row) => row.date);
 
+	const { rateDeltaPts } = periodMetrics;
 	const pace =
 		rateDeltaPts === null || Math.abs(rateDeltaPts) < 0.05
 			? null
