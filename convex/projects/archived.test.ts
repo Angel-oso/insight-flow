@@ -18,7 +18,7 @@ async function archivedWorkspace() {
 	const owner = t.withIdentity({ subject: ownerId });
 	const guest = t.withIdentity({ subject: guestId });
 	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, {
-		name: "Archive Co",
+		name: "Archive Co", projectName: "Archive Co",
 	});
 	const roles = await owner.query(api.projects.settings.roles, { projectSlug });
 	const memberRole = roles.roles.find((role) => role.name === "member")!;
@@ -94,7 +94,7 @@ test("archived projects cannot accept new members through old invitations", asyn
 	const owner = t.withIdentity({ subject: ownerId });
 	const late = t.withIdentity({ subject: lateId });
 	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, {
-		name: "Late Co",
+		name: "Late Co", projectName: "Late Co",
 	});
 	const roles = await owner.query(api.projects.settings.roles, { projectSlug });
 	const { token } = await owner.action(api.invitations.actions.create, {
@@ -121,7 +121,7 @@ test("invitation previews need a session and never read the clock", async () => 
 	const owner = t.withIdentity({ subject: ownerId });
 	const guest = t.withIdentity({ subject: guestId });
 	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, {
-		name: "Preview Co",
+		name: "Preview Co", projectName: "Preview Co",
 	});
 	const roles = await owner.query(api.projects.settings.roles, { projectSlug });
 	const { token, expiresAt } = await owner.action(api.invitations.actions.create, {

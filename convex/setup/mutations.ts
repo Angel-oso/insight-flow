@@ -16,9 +16,9 @@ function slugFromName(name: string) {
 
 /** Creates a workspace the caller owns, with an initial admin project. */
 export const createWorkspace = mutation({
-	args: { name: v.string() },
+	args: { name: v.string(), projectName: v.string() },
 	returns: v.object({ projectSlug: v.string(), workspaceName: v.string() }),
-	handler: async (ctx, { name: rawName }) => {
+	handler: async (ctx, { name: rawName, projectName: rawProjectName }) => {
 		const userId = await getAuthUserId(ctx);
 		if (!userId) throw new ConvexError("Sign in to create a workspace.");
 		const user = await ctx.db.get("users", userId);
@@ -28,6 +28,12 @@ export const createWorkspace = mutation({
 		if (!name || name.length > 80) {
 			throw new ConvexError("Give the workspace a name between 1 and 80 characters.");
 		}
+		const projectName = rawProjectName.trim().replace(/\s+/g, " ");
+		if (!projectName || projectName.length > 80) {
+			throw new ConvexError("Give the first project a name between 1 and 80 characters.");
+		}
+		const projectSlug = slugFromName(projectName);
+		if (!projectSlug) throw new ConvexError("Give the first project a name with letters or numbers.");
 		const slug = slugFromName(name);
 		if (!slug) {
 			throw new ConvexError("Give the workspace a name with letters or numbers.");
@@ -40,7 +46,7 @@ export const createWorkspace = mutation({
 				.unique(),
 			ctx.db
 				.query("projects")
-				.withIndex("by_slug", (q) => q.eq("slug", slug))
+				.withIndex("by_slug", (q) => q.eq("slug", projectSlug))
 				.unique(),
 		]);
 		if (existingOrganization || existingProject) {
@@ -69,8 +75,8 @@ export const createWorkspace = mutation({
 			);
 		const projectId = await ctx.db.insert("projects", {
 			organizationId,
-			name,
-			slug,
+			name: projectName,
+			slug: projectSlug,
 			description: "The first project in this workspace.",
 			status: "Active",
 			inboxEnabled: true,
@@ -91,6 +97,10 @@ export const createWorkspace = mutation({
 			joinedAt: now,
 		});
 
-		return { projectSlug: slug, workspaceName: name };
+		await ctx.db.insert("activities", {
+			projectId, actorId: userId, type: "project_created",
+			message: `Created project ${projectName}`, createdAt: now,
+		});
+		return { projectSlug, workspaceName: name };
 	},
 });

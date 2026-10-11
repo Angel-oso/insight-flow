@@ -12,7 +12,7 @@ test("taxonomy removal refuses to truncate organizations with more than 100 proj
 	const t = convexTest(schema, modules);
 	const userId = await t.run((ctx) => ctx.db.insert("users", { name: "Owner" }));
 	const owner = t.withIdentity({ subject: userId });
-	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, { name: "Bounded" });
+	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, { name: "Bounded", projectName: "Bounded" });
 	const fields = await t.run(async (ctx) => {
 		const project = await ctx.db.query("projects").withIndex("by_slug", (q) => q.eq("slug", projectSlug)).unique();
 		const { _id, _creationTime, ...fields } = project!;
@@ -41,7 +41,7 @@ test("missing organization taxonomies ignore legacy docs and materialize on firs
 	const t = convexTest(schema, modules);
 	const userId = await t.run((ctx) => ctx.db.insert("users", { name: "Owner" }));
 	const owner = t.withIdentity({ subject: userId });
-	await owner.mutation(api.setup.mutations.createWorkspace, { name: "Original" });
+	await owner.mutation(api.setup.mutations.createWorkspace, { name: "Original", projectName: "Original" });
 	await t.run(async (ctx) => {
 		const organizationId = await ctx.db.insert("organizations", { name: "Uninitialized", slug: "uninitialized", ownerId: userId });
 		const role = await ctx.db.query("roles").withIndex("by_name", (q) => q.eq("name", "admin")).unique();
@@ -75,7 +75,7 @@ test("a priority used as a project's default cannot be removed", async () => {
 	const t = convexTest(schema, modules);
 	const userId = await t.run((ctx) => ctx.db.insert("users", { name: "Owner" }));
 	const owner = t.withIdentity({ subject: userId });
-	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, { name: "Defaults" });
+	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, { name: "Defaults", projectName: "Defaults" });
 	const option = await owner.mutation(api.taxonomies.mutations.createOption, {
 		projectSlug, key: "priority", label: "Someday", color: "#222222",
 	});

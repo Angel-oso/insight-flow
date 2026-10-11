@@ -132,6 +132,8 @@ export const get = query({
 		activities: v.array(
 			v.object({
 				id: v.id("activities"),
+				feedbackId: v.union(v.id("feedback"), v.null()),
+				projectSlug: v.string(),
 				actor: v.string(),
 				initials: v.string(),
 				action: v.string(),
@@ -327,12 +329,14 @@ export const get = query({
 					: "System";
 				return {
 					id: activity._id,
+					feedbackId: activity.feedbackId ?? null,
+					projectSlug: project.slug,
 					actor,
 					initials: initials(actor),
 					action: activity.message,
 					createdAt: activity.createdAt,
 					tone:
-						activity.type === "received" || activity.type === "status_changed"
+						activity.type === "received" || activity.type === "status_changed" || activity.type === "project_created"
 							? ("primary" as const)
 							: ("neutral" as const),
 				};

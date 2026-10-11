@@ -308,7 +308,7 @@ test("new accounts create their first workspace as its administrator and owner",
 		canCreateWorkspace: true,
 	});
 	const workspace = await user.mutation(api.setup.mutations.createWorkspace, {
-		name: "North Star",
+		name: "North Star", projectName: "North Star",
 	});
 
 	expect(workspace).toEqual({ projectSlug: "north-star", workspaceName: "North Star" });
@@ -323,7 +323,7 @@ test("new accounts create their first workspace as its administrator and owner",
 		description: "The first project in this workspace.",
 	});
 	const secondWorkspace = await user.mutation(api.setup.mutations.createWorkspace, {
-		name: "Second workspace",
+		name: "Second workspace", projectName: "Second workspace",
 	});
 
 	const ownership = await t.run(async (ctx) => {
@@ -693,7 +693,7 @@ test("new workspace taxonomy reads do not require legacy user organizationId", a
 	const t = convexTest(schema, modules);
 	const userId = await t.run((ctx) => ctx.db.insert("users", { name: "New owner" }));
 	const owner = t.withIdentity({ subject: userId });
-	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, { name: "Fresh Org" });
+	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, { name: "Fresh Org", projectName: "Fresh Org" });
 	const taxonomies = await owner.query(api.taxonomies.queries.list, { projectSlug });
 	expect(taxonomies.statuses.map((item) => item.value)).toEqual([
 		"New", "In review", "Planned", "In progress", "Completed", "Discarded",
@@ -714,7 +714,7 @@ async function seedSecondOrganization() {
 	const { t, ids } = await seedTestWorkspace();
 	const userId = await t.run((ctx) => ctx.db.insert("users", { name: "Other owner" }));
 	const owner = t.withIdentity({ subject: userId });
-	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, { name: "Other Org" });
+	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, { name: "Other Org", projectName: "Other Org" });
 	const recipientId = await t.run(async (ctx) => {
 		const recipientId = await ctx.db.insert("users", { name: "Other member" });
 		const project = await ctx.db.query("projects").withIndex("by_slug", (q) => q.eq("slug", projectSlug)).unique();

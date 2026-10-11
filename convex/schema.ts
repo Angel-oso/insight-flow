@@ -122,9 +122,10 @@ export default defineSchema({
 	}).index("by_feedbackId_createdAt", ["feedbackId", "createdAt"]),
 	activities: defineTable({
 		projectId: v.id("projects"),
-		feedbackId: v.id("feedback"),
+		feedbackId: v.optional(v.id("feedback")),
 		actorId: v.union(v.id("users"), v.null()),
 		type: v.union(
+			v.literal("project_created"),
 			v.literal("received"),
 			v.literal("status_changed"),
 			v.literal("commented"),

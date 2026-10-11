@@ -2,7 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { query } from "../_generated/server";
 import { hasCapability } from "../../lib/auth/permissions";
-import { resolveProjectAccess } from "../access/roles";
+import { resolveOrganizationAccess, resolveProjectAccess } from "../access/roles";
 
 /**
  * Access gate for the authenticated app shell. The client renders the
@@ -41,6 +41,16 @@ export const status = query({
 			) {
 				hasWorkspace = true;
 				break;
+			}
+		}
+		if (!hasWorkspace) {
+			const memberships = await ctx.db.query("organizationMembers")
+				.withIndex("by_userId", (q) => q.eq("userId", userId)).take(101);
+			for (const membership of memberships) {
+				if (await resolveOrganizationAccess(ctx, userId, membership.organizationId)) {
+					hasWorkspace = true;
+					break;
+				}
 			}
 		}
 		return {
