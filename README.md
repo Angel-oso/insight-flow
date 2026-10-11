@@ -81,7 +81,9 @@ triage change and note writes an activity entry.
 Title, description, category, and optional name and email. Validated on the
 server; closed when the project is paused, archived, or its intake is turned
 off. New items start in the first status with the project's default priority,
-unassigned. A hidden honeypot field absorbs simple bots.
+unassigned. A hidden honeypot field absorbs simple bots, and intake closes
+when a project reaches its 200-item inbox limit so the team's views keep
+working.
 
 ### Organization taxonomies
 
@@ -147,7 +149,8 @@ convex/
   capabilities on the server.
 - Index-driven reads (`withIndex`), bounded collections (`take(n)`) with
   explicit errors instead of silent truncation.
-- No wall-clock in queries: `now` comes in as an argument from the client.
+- Time-windowed queries (overview, inbox ages) take `now` as an argument
+  from the client instead of reading the clock.
 - `args` + `returns` validators on every function.
 - No stored counters: metrics, age, and relative times are derived.
 

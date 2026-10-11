@@ -42,6 +42,7 @@ export function presentFeedback(
 		id: item._id,
 		project,
 		ageDays,
+		receivedAtMs: item.receivedAt,
 		inactiveDays,
 		isStale:
 			!finals.has(item.status) && inactiveDays >= 7,

@@ -130,7 +130,7 @@ export function FeedbackWorkspace({
 			(a, b) =>
 				Number(finals.has(a.status)) - Number(finals.has(b.status)) ||
 				rankOf(b) - rankOf(a) ||
-				b.ageDays - a.ageDays,
+				a.receivedAtMs - b.receivedAtMs,
 		);
 	}, [filters, items, finals, laneRank, taxonomies, viewerId]);
 
