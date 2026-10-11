@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { RedirectIfAuthenticated } from "@/components/auth/auth-guard";
 
@@ -9,7 +9,9 @@ export default function AuthLayout({
 }) {
 	return (
 		<AuthShell>
-			<RedirectIfAuthenticated>{children}</RedirectIfAuthenticated>
+			<Suspense fallback={children}>
+				<RedirectIfAuthenticated>{children}</RedirectIfAuthenticated>
+			</Suspense>
 		</AuthShell>
 	);
 }

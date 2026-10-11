@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { DefaultProjectRedirect } from "@/components/projects/default-project-redirect";
 
 export default function TeamPage() {
-	redirect("/projects/client-portal/team");
+	return <DefaultProjectRedirect section="team" />;
 }

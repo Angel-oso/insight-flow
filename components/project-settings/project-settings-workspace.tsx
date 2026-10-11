@@ -2,6 +2,7 @@
 
 import {
 	Archive,
+	ArchiveRestore,
 	Check,
 	ChevronDown,
 	Inbox,
@@ -38,8 +39,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import type { Doc } from "@/convex/_generated/dataModel";
 import type { Project } from "@/lib/projects";
-import { useTaxonomies } from "@/lib/taxonomy";
+import { useTaxonomies, type TaxonomyItem } from "@/lib/taxonomy";
 import { TaxonomyManager } from "./taxonomy-manager";
+import { PublicLink } from "./public-link";
 import {
 	useProjectSettingsData,
 	useProjectSettingsWrites,
@@ -109,7 +111,7 @@ function PriorityMenu({
 	disabled,
 }: {
 	readonly priority: Priority;
-	readonly priorities: readonly string[];
+	readonly priorities: readonly Pick<TaxonomyItem, "value" | "label">[];
 	readonly onPriorityChange: (priority: Priority) => void;
 	readonly disabled?: boolean;
 }) {
@@ -118,7 +120,7 @@ function PriorityMenu({
 			<DropdownMenuTrigger
 				render={
 					<Button type="button" variant="outline" disabled={disabled}>
-						{priority}
+						{priorities.find((candidate) => candidate.value === priority)?.label ?? priority}
 						<ChevronDown data-icon="inline-end" />
 					</Button>
 				}
@@ -128,11 +130,11 @@ function PriorityMenu({
 					<DropdownMenuLabel>Default priority</DropdownMenuLabel>
 					{priorities.map((candidate) => (
 						<DropdownMenuItem
-							key={candidate}
-							onClick={() => onPriorityChange(candidate as Priority)}
+							key={candidate.value}
+							onClick={() => onPriorityChange(candidate.value)}
 						>
-							{candidate}
-							{candidate === priority ? (
+							{candidate.label}
+							{candidate.value === priority ? (
 								<Check className="ml-auto size-3.5" />
 							) : null}
 						</DropdownMenuItem>
@@ -145,14 +147,16 @@ function PriorityMenu({
 
 export function ProjectSettingsWorkspace({
 	canManage,
+	canManageTaxonomies,
 	project,
 }: {
 	readonly canManage: boolean;
+	readonly canManageTaxonomies: boolean;
 	readonly project: Project;
 }) {
 	const data = useProjectSettingsData(project.slug);
-	const { pending, error, saveSettings } = useProjectSettingsWrites(project.slug);
-	const taxonomies = useTaxonomies();
+	const { pending, error, saveSettings, restoreProject } = useProjectSettingsWrites(project.slug);
+	const taxonomies = useTaxonomies(project.slug);
 	const [draft, setDraft] = useState<SettingsState | null>(null);
 	const [hasSaved, setHasSaved] = useState(false);
 	const [isArchiveOpen, setIsArchiveOpen] = useState(false);
@@ -170,8 +174,8 @@ export function ProjectSettingsWorkspace({
 	const canEdit = canManage && !isArchived && !pending;
 	// Database priorities once loaded; static mirror only for the first paint.
 	const priorityOptions =
-		taxonomies?.priorities.map((item) => item.label) ??
-		["Low", "Medium", "High", "Critical"];
+		taxonomies?.priorities ??
+		["Low", "Medium", "High", "Critical"].map((value) => ({ value, label: value }));
 
 	const updateSettings = (update: Partial<SettingsState>) => {
 		setHasSaved(false);
@@ -189,6 +193,13 @@ export function ProjectSettingsWorkspace({
 				defaultPriority: settings.defaultPriority,
 			})
 		) {
+			setHasSaved(true);
+		}
+	};
+
+	const handleRestore = async () => {
+		if (await restoreProject()) {
+			setDraft({ ...settings, status: "Active" });
 			setHasSaved(true);
 		}
 	};
@@ -218,13 +229,26 @@ export function ProjectSettingsWorkspace({
 					<div>
 						<p className="font-semibold">This project is archived.</p>
 						<p className="mt-1 text-sm leading-6">
-							Feedback intake and configuration changes are paused for this
-							project.
+							Feedback intake and configuration changes are paused. Restore it
+							to make it active again.
 						</p>
 					</div>
-					<span className="inline-flex w-fit items-center gap-1.5 rounded-md border border-current/20 px-2 py-1 text-xs font-semibold">
-						<Archive className="size-3.5" /> Archived
-					</span>
+					{canManage ? (
+						<Button
+							type="button"
+							variant="outline"
+							className="bg-background"
+							disabled={pending}
+							onClick={() => void handleRestore()}
+						>
+							<ArchiveRestore data-icon="inline-start" />
+							{pending ? "Restoring…" : "Restore project"}
+						</Button>
+					) : (
+						<span className="inline-flex w-fit items-center gap-1.5 rounded-md border border-current/20 px-2 py-1 text-xs font-semibold">
+							<Archive className="size-3.5" /> Archived
+						</span>
+					)}
 				</section>
 			) : null}
 			{error ? (
@@ -308,6 +332,10 @@ export function ProjectSettingsWorkspace({
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="divide-y px-5 py-5 sm:px-6">
+					<PublicLink
+						slug={data.project.slug}
+						accepting={data.project.status === "Active" && data.project.inboxEnabled}
+					/>
 					<SettingToggle
 						label="Accept feedback"
 						description="Keep the project inbox available to receive new feedback. Pausing it preserves existing history."
@@ -334,7 +362,7 @@ export function ProjectSettingsWorkspace({
 				</CardContent>
 			</Card>
 
-			<TaxonomyManager disabled={!canEdit} />
+			<TaxonomyManager projectSlug={project.slug} disabled={!canManageTaxonomies || isArchived || pending} />
 
 			<Card className="gap-0 py-0 shadow-none ring-destructive/20">
 				<CardHeader className="border-b px-5 py-5 sm:px-6">

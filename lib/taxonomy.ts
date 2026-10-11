@@ -105,14 +105,6 @@ export function minStatusRank(taxonomies: Taxonomies): number {
 }
 
 /** Display taxonomies straight from the database; undefined while loading. */
-export function useTaxonomies(): Taxonomies | undefined {
-	const docs = useQuery(api.taxonomies.queries.list);
-	if (!docs) return undefined;
-	const byKey = (key: "status" | "category" | "priority") =>
-		docs.find((doc) => doc.key === key)?.items ?? [];
-	return {
-		statuses: byKey("status"),
-		categories: byKey("category"),
-		priorities: byKey("priority"),
-	};
+export function useTaxonomies(projectSlug: string): Taxonomies | undefined {
+	return useQuery(api.taxonomies.queries.list, { projectSlug });
 }

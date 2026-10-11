@@ -21,10 +21,11 @@ const defaultGrants: Record<Role, readonly Capability[]> = {
 		"feedback.update",
 		"feedback.comment",
 		"project.view",
+		"team.view",
 	],
 };
 
-/** Create missing catalog records without replacing existing custom grants. */
+/** Create catalog records and restore baseline grants without removing custom ones. */
 export const seedAccessCatalog = internalMutation({
 	args: {},
 	returns: v.null(),
@@ -43,7 +44,19 @@ export const seedAccessCatalog = internalMutation({
 				.query("roles")
 				.withIndex("by_name", (q) => q.eq("name", name))
 				.unique();
-			if (existing) continue;
+			if (existing) {
+				const baselinePermissionIds = defaultGrants[name].map(
+					(key) => permissionIds.get(key)!,
+				);
+				const mergedPermissionIds = [...new Set([
+					...existing.permissionIds,
+					...baselinePermissionIds,
+				])];
+				if (mergedPermissionIds.length !== existing.permissionIds.length) {
+					await ctx.db.patch("roles", existing._id, { permissionIds: mergedPermissionIds });
+				}
+				continue;
+			}
 			await ctx.db.insert("roles", {
 				name,
 				permissionIds: defaultGrants[name].map((key) => permissionIds.get(key)!),
@@ -113,7 +126,50 @@ export const assignUserAccess = internalMutation({
 		if (roleNames.includes("admin") && !(await ctx.db.get("users", organization.ownerId))) {
 			await ctx.db.patch("organizations", organizationId, { ownerId: userId });
 		}
-		await ctx.db.patch("users", userId, { organizationId, roleIds });
+		const membership = await ctx.db
+			.query("organizationMembers")
+			.withIndex("by_organizationId_userId", (q) =>
+				q.eq("organizationId", organizationId).eq("userId", userId),
+			)
+			.unique();
+		if (membership) await ctx.db.patch("organizationMembers", membership._id, { roleIds });
+		else await ctx.db.insert("organizationMembers", { organizationId, userId, roleIds });
 		return null;
+	},
+});
+
+/**
+ * One-off backfill: copies legacy `users.organizationId` / `users.roleIds`
+ * grants into `organizationMembers`, which is now the only source of access.
+ * Idempotent and paginated; run until `isDone` is true.
+ */
+export const migrateLegacyMemberships = internalMutation({
+	args: { cursor: v.union(v.string(), v.null()) },
+	returns: v.object({
+		migrated: v.number(),
+		isDone: v.boolean(),
+		continueCursor: v.string(),
+	}),
+	handler: async (ctx, { cursor }) => {
+		const page = await ctx.db.query("users").paginate({ cursor, numItems: 100 });
+		let migrated = 0;
+		for (const user of page.page) {
+			if (!user.organizationId || !user.roleIds?.length) continue;
+			const organizationId = user.organizationId;
+			const existing = await ctx.db
+				.query("organizationMembers")
+				.withIndex("by_organizationId_userId", (q) =>
+					q.eq("organizationId", organizationId).eq("userId", user._id),
+				)
+				.unique();
+			if (existing) continue;
+			await ctx.db.insert("organizationMembers", {
+				organizationId,
+				userId: user._id,
+				roleIds: user.roleIds,
+			});
+			migrated += 1;
+		}
+		return { migrated, isDone: page.isDone, continueCursor: page.continueCursor };
 	},
 });

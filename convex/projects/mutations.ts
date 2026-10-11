@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { hasCapability } from "../../lib/auth/permissions";
-import { resolveUserAccess } from "../access/roles";
+import { resolveOrganizationAccess, resolveProjectAccess } from "../access/roles";
 import { mutation } from "../_generated/server";
 import { requireUserId } from "../feedback/access";
 import { getTaxonomies } from "../taxonomies/lib";
@@ -15,19 +15,21 @@ function slugFromName(name: string) {
 }
 
 export const create = mutation({
-	args: { name: v.string(), description: v.string() },
+	args: { currentProjectSlug: v.optional(v.string()), organizationId: v.optional(v.id("organizations")), name: v.string(), description: v.string() },
 	returns: v.object({
 		slug: v.string(),
 		name: v.string(),
 		description: v.string(),
 	}),
-	handler: async (ctx, { name: rawName, description: rawDescription }) => {
+	handler: async (ctx, { currentProjectSlug, organizationId: selectedOrganizationId, name: rawName, description: rawDescription }) => {
 		const userId = await requireUserId(ctx);
-		const access = await resolveUserAccess(ctx, userId);
-		if (
-			!access?.user.organizationId ||
-			!hasCapability(access.permissions, "organization.manage")
-		)
+		const currentProject = currentProjectSlug ? await ctx.db.query("projects")
+			.withIndex("by_slug", (q) => q.eq("slug", currentProjectSlug)).unique() : null;
+		const organizationId = selectedOrganizationId ?? currentProject?.organizationId;
+		const access = organizationId ? await resolveOrganizationAccess(ctx, userId, organizationId) : null;
+		const projectAccess = currentProject ? await resolveProjectAccess(ctx, userId, currentProject._id) : null;
+		if (!organizationId || !access || !hasCapability(access.permissions, "organization.manage") ||
+			(currentProjectSlug !== undefined && (!currentProject || currentProject.organizationId !== organizationId || !projectAccess?.permissions.includes("organization.manage"))))
 			throw new ConvexError("You cannot create projects in this workspace.");
 
 		const name = rawName.trim().replace(/\s+/g, " ");
@@ -44,7 +46,13 @@ export const create = mutation({
 			.unique();
 		if (existing) throw new ConvexError("A project with this name already exists.");
 
-		const { priorities } = await getTaxonomies(ctx);
+		const [{ priorities }, projectRole] = await Promise.all([
+			getTaxonomies(ctx, organizationId),
+			ctx.db
+				.query("roles")
+				.withIndex("by_name", (q) => q.eq("name", access.role))
+				.unique(),
+		]);
 		const defaultPriority =
 			priorities.find((priority) => priority.value === "Medium") ??
 			priorities.reduce((lowest, priority) =>
@@ -52,7 +60,7 @@ export const create = mutation({
 			);
 		const now = Date.now();
 		const projectId = await ctx.db.insert("projects", {
-			organizationId: access.user.organizationId,
+			organizationId,
 			name,
 			slug,
 			description: description || "New project workspace.",
@@ -63,8 +71,17 @@ export const create = mutation({
 			weeklyDigest: false,
 			updatedAt: now,
 		});
-		await ctx.db.insert("projectMembers", { projectId, userId, joinedAt: now });
+		await ctx.db.insert("projectMembers", {
+			projectId,
+			userId,
+			...(projectRole ? { roleId: projectRole._id } : {}),
+			joinedAt: now,
+		});
 
+		await ctx.db.insert("activities", {
+			projectId, actorId: userId, type: "project_created",
+			message: `Created project ${name}`, createdAt: now,
+		});
 		return { slug, name, description: description || "New project workspace." };
 	},
 });

@@ -1,7 +1,8 @@
 import { v } from "convex/values";
 import { query } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { resolveUserAccess } from "../access/roles";
+import { hasCapability } from "../../lib/auth/permissions";
+import { resolveProjectAccess } from "../access/roles";
 import { listProjectFeedback, requireCapability, requireProject } from "../feedback/access";
 import { getFinalStatuses, getPriorityRanks, getTaxonomies } from "../taxonomies/lib";
 import schema from "../schema";
@@ -26,15 +27,19 @@ export const get = query({
 			criticalLabel: v.union(v.string(), v.null()),
 			criticalColor: v.union(v.string(), v.null()),
 		}),
+		showsWorkload: v.boolean(),
 		members: v.array(
 			v.object({
 				id: v.id("users"),
+				roleId: v.id("roles"),
 				name: v.string(),
 				email: v.string(),
 				role: schema.tables.roles.validator.fields.name,
-				projectCount: v.number(),
-				openAssigned: v.number(),
-				criticalAssigned: v.number(),
+				// Per-person workload is null unless the caller can assign work
+				// (PRODUCT.md: members never get team-performance comparisons).
+				projectCount: v.union(v.number(), v.null()),
+				openAssigned: v.union(v.number(), v.null()),
+				criticalAssigned: v.union(v.number(), v.null()),
 				lastActivityAt: v.union(v.number(), v.null()),
 				joinedAt: v.number(),
 			}),
@@ -43,6 +48,7 @@ export const get = query({
 	handler: async (ctx, { projectSlug }) => {
 		const { project, access } = await requireProject(ctx, projectSlug);
 		requireCapability(access.permissions, "team.view");
+		const showsWorkload = hasCapability(access.permissions, "feedback.assign");
 		const projectId: Id<"projects"> = project._id;
 
 		const links = await ctx.db
@@ -54,8 +60,8 @@ export const get = query({
 
 		// Project-level backlog for the unassigned count (bounded, shared cap).
 		const items = await listProjectFeedback(ctx, projectId);
-		const finals = await getFinalStatuses(ctx);
-		const priorityRank = await getPriorityRanks(ctx);
+		const finals = await getFinalStatuses(ctx, project.organizationId);
+		const priorityRank = await getPriorityRanks(ctx, project.organizationId);
 		const rankOf = (priority: string) => priorityRank.get(priority) ?? 0;
 		let unassigned = 0;
 		let critical = 0;
@@ -71,17 +77,23 @@ export const get = query({
 			if (rankOf(item.priority) === laneRank) critical += 1;
 		}
 
-		const members = [];
-		for (const link of links) {
-			const member = await resolveUserAccess(ctx, link.userId);
-			if (!member || member.user.organizationId !== project.organizationId) continue;
+		const members = (
+			await Promise.all(links.map(async (link) => {
+			const member = await resolveProjectAccess(ctx, link.userId, projectId);
+			if (!member) return null;
 			const user = member.user;
-			const assigned = await ctx.db
+			const [assigned, scope] = await Promise.all([
+				ctx.db
 				.query("feedback")
 				.withIndex("by_projectId_assigneeId", (q) =>
 					q.eq("projectId", projectId).eq("assigneeId", user._id),
 				)
-				.take(201);
+				.take(201),
+				ctx.db
+					.query("projectMembers")
+					.withIndex("by_userId", (q) => q.eq("userId", user._id))
+					.take(51),
+			]);
 			let openAssigned = 0;
 			let criticalAssigned = 0;
 			let lastActivityAt: number | null = null;
@@ -91,17 +103,15 @@ export const get = query({
 				openAssigned += 1;
 				if (rankOf(item.priority) === laneRank) criticalAssigned += 1;
 			}
-			const scope = await ctx.db
-				.query("projectMembers")
-				.withIndex("by_userId", (q) => q.eq("userId", user._id))
-				.take(51);
-			let projectCount = 0;
-			for (const projectLink of scope) {
-				const linkedProject = await ctx.db.get("projects", projectLink.projectId);
-				if (linkedProject?.organizationId === project.organizationId) projectCount += 1;
-			}
-			members.push({
+			const linkedProjects = await Promise.all(
+				scope.map((projectLink) => ctx.db.get("projects", projectLink.projectId)),
+			);
+			const projectCount = linkedProjects.filter(
+				(linkedProject) => linkedProject?.organizationId === project.organizationId,
+			).length;
+			return {
 				id: user._id,
+				roleId: member.roleId,
 				name: user.name ?? "Unknown member",
 				email: user.email ?? "",
 				role: member.role,
@@ -110,8 +120,9 @@ export const get = query({
 				criticalAssigned,
 				lastActivityAt,
 				joinedAt: link.joinedAt,
-			});
-		}
+			};
+			}),
+		)).filter((member) => member !== null);
 		// Most loaded first: where work is concentrated.
 		members.sort(
 			(a, b) =>
@@ -119,10 +130,21 @@ export const get = query({
 				b.criticalAssigned - a.criticalAssigned ||
 				a.name.localeCompare(b.name),
 		);
+		const visibleMembers = showsWorkload
+			? members
+			: members
+					.map((member) => ({
+						...member,
+						projectCount: null,
+						openAssigned: null,
+						criticalAssigned: null,
+						lastActivityAt: null,
+					}))
+					.sort((a, b) => a.name.localeCompare(b.name));
 
 		const coordinatorCount = members.filter((member) => member.role !== "member").length;
 		const openAssigned = members.reduce((total, member) => total + member.openAssigned, 0);
-		const { priorities } = await getTaxonomies(ctx);
+		const { priorities } = await getTaxonomies(ctx, project.organizationId);
 		const lanePriority = priorities.find((entry) => entry.rank === laneRank);
 		const criticalLabel = lanePriority?.label ?? null;
 		const criticalColor = lanePriority?.color ?? null;
@@ -138,7 +160,8 @@ export const get = query({
 				criticalLabel,
 				criticalColor,
 			},
-			members,
+			showsWorkload,
+			members: visibleMembers,
 		};
 	},
 });

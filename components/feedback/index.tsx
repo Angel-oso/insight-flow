@@ -11,8 +11,10 @@ import { useFeedbackClock } from "./use-feedback";
 
 function FeedbackContent({ projectSlug }: { readonly projectSlug: string }) {
 	const data = useQuery(api.feedback.queries.workspace, { projectSlug });
+	const viewer = useQuery(api.users.queries.current, {});
 	const now = useFeedbackClock();
-	if (!data)
+	// Wait for the viewer too: a member's inbox opens on their own queue.
+	if (!data || viewer === undefined)
 		return (
 			<p role="status" className="p-8 text-muted-foreground">
 				Loading feedback…
@@ -40,6 +42,8 @@ function FeedbackContent({ projectSlug }: { readonly projectSlug: string }) {
 					taxonomies={data.taxonomies}
 					now={now}
 					archived={data.project.status === "Archived"}
+					viewerId={viewer?.id ?? null}
+					defaultPriority={data.project.defaultPriority}
 				/>
 			</div>
 		</div>

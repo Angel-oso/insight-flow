@@ -1,3 +1,4 @@
+import { OrganizationNavigation } from "@/components/layout/sidebar/organization-navigation";
 import { NavUser } from "@/components/layout/sidebar/nav-user";
 import { ProjectSwitcher } from "@/components/layout/sidebar/project-switcher";
 import { WorkspaceNavigation } from "@/components/layout/sidebar/workspace-navigation";
@@ -16,7 +17,7 @@ import type { Project } from "@/lib/projects";
 export function AppSidebar({
 	project,
 	...props
-}: React.ComponentProps<typeof Sidebar> & { readonly project: Project }) {
+}: React.ComponentProps<typeof Sidebar> & { readonly project?: Project }) {
 	return (
 		<Sidebar collapsible="icon" {...props}>
 			<SidebarHeader>
@@ -26,7 +27,8 @@ export function AppSidebar({
 			</SidebarHeader>
 
 			<SidebarContent>
-				<WorkspaceNavigation projectSlug={project.slug} />
+				<OrganizationNavigation projectSlug={project?.slug} />
+				{project ? <WorkspaceNavigation projectSlug={project.slug} /> : null}
 			</SidebarContent>
 
 			<SidebarFooter>

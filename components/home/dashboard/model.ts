@@ -49,6 +49,8 @@ export type OverviewActivityTone = "primary" | "neutral" | "success" | "warning"
 
 export type OverviewActivity = {
 	readonly id: Id<"activities">;
+	readonly feedbackId?: Id<"feedback"> | null;
+	readonly projectSlug?: string;
 	readonly actor: string;
 	readonly initials: string;
 	readonly action: string;
@@ -68,6 +70,10 @@ export type OverviewHealth = {
 };
 
 export type PresentedOverview = {
+	readonly viewer: OverviewQueryData["viewer"];
+	readonly mine: OverviewQueryData["mine"];
+	readonly workload: OverviewQueryData["workload"];
+	readonly taxonomies: OverviewQueryData["taxonomies"];
 	readonly metrics: readonly OverviewMetric[];
 	readonly trendRows: readonly OverviewTrendRow[];
 	readonly trendTicks: readonly string[];
@@ -81,7 +87,7 @@ export type PresentedOverview = {
 	readonly footerUpdated: string;
 };
 
-function relativeTime(timestamp: number, now: number) {
+export function relativeTime(timestamp: number, now: number) {
 	const minutes = Math.max(0, Math.floor((now - timestamp) / 60000));
 	if (minutes < 1) return "Just now";
 	if (minutes < 60) return `${minutes} min ago`;
@@ -92,6 +98,42 @@ function relativeTime(timestamp: number, now: number) {
 function percentChange(current: number, previous: number) {
 	if (previous <= 0) return null;
 	return ((current - previous) / previous) * 100;
+}
+
+/**
+ * Period metrics shared by the project and organization overviews so both
+ * screens report the same numbers. Resolution rate follows PRODUCT.md:
+ * resolved (any final status) / all feedback, so it never exceeds 100%; the
+ * period context is how many items were resolved in the window.
+ */
+export function presentPeriodMetrics(metrics: {
+	readonly received: number;
+	readonly receivedPrevious: number;
+	readonly completedInRange: number;
+	readonly completedPrevious: number;
+	readonly resolved: number;
+	readonly total: number;
+}) {
+	const receivedDelta = percentChange(metrics.received, metrics.receivedPrevious);
+	const currentRate =
+		metrics.received > 0 ? metrics.completedInRange / metrics.received : null;
+	const previousRate =
+		metrics.receivedPrevious > 0
+			? metrics.completedPrevious / metrics.receivedPrevious
+			: null;
+	// Throughput comparison for the trend "pace" note only.
+	const rateDeltaPts =
+		currentRate !== null && previousRate !== null
+			? (currentRate - previousRate) * 100
+			: null;
+	return {
+		receivedChange: receivedDelta === null ? "—" : signed(receivedDelta, 1, "%"),
+		resolutionRate:
+			metrics.total > 0 ? `${Math.round((metrics.resolved / metrics.total) * 100)}%` : "—",
+		resolutionChange: `${metrics.completedInRange} resolved`,
+		resolutionContext: `this period · ${metrics.completedPrevious} in the previous one`,
+		rateDeltaPts,
+	};
 }
 
 function signed(value: number, digits: number, unit: string) {
@@ -116,23 +158,16 @@ export function presentOverview(
 	);
 	const criticalLabel = metrics.criticalLabel ?? "Critical";
 
-	const receivedDelta = percentChange(metrics.received, metrics.receivedPrevious);
-	const currentRate =
-		metrics.received > 0 ? metrics.completedInRange / metrics.received : null;
-	const previousRate =
-		metrics.receivedPrevious > 0
-			? metrics.completedPrevious / metrics.receivedPrevious
-			: null;
-	const rateDeltaPts =
-		currentRate !== null && previousRate !== null
-			? (currentRate - previousRate) * 100
-			: null;
+	const periodMetrics = presentPeriodMetrics({
+		...metrics,
+		resolved: data.health.completed,
+	});
 
 	const presentedMetrics: readonly OverviewMetric[] = [
 		{
 			label: "Feedback received",
 			value: String(metrics.received),
-			change: receivedDelta === null ? "—" : signed(receivedDelta, 1, "%"),
+			change: periodMetrics.receivedChange,
 			context: "vs. previous period",
 			tone: "primary",
 		},
@@ -156,9 +191,9 @@ export function presentOverview(
 		},
 		{
 			label: "Resolution rate",
-			value: currentRate === null ? "—" : `${Math.round(currentRate * 100)}%`,
-			change: rateDeltaPts === null ? "—" : signed(rateDeltaPts, 1, " pts"),
-			context: "vs. previous period",
+			value: periodMetrics.resolutionRate,
+			change: periodMetrics.resolutionChange,
+			context: periodMetrics.resolutionContext,
 			tone: "success",
 		},
 	];
@@ -177,6 +212,7 @@ export function presentOverview(
 		.filter((_, index) => index % tickStep === 0)
 		.map((row) => row.date);
 
+	const { rateDeltaPts } = periodMetrics;
 	const pace =
 		rateDeltaPts === null || Math.abs(rateDeltaPts) < 0.05
 			? null
@@ -185,6 +221,10 @@ export function presentOverview(
 				: `Resolution pace slowed ${signed(rateDeltaPts, 1, " pts")}`;
 
 	return {
+		viewer: data.viewer,
+		mine: data.mine,
+		workload: data.workload,
+		taxonomies: data.taxonomies,
 		metrics: presentedMetrics,
 		trendRows,
 		trendTicks,
@@ -221,6 +261,8 @@ export function presentOverview(
 		}),
 		activities: data.activities.map((activity) => ({
 			id: activity.id,
+			feedbackId: activity.feedbackId,
+			projectSlug: activity.projectSlug,
 			actor: activity.actor,
 			initials: activity.initials,
 			action: activity.action,
@@ -233,10 +275,7 @@ export function presentOverview(
 			received: health.received,
 			open: health.open,
 			critical: health.critical,
-			resolution:
-				health.total > 0
-					? `${Math.round((health.completed / health.total) * 100)}%`
-					: "—",
+			resolution: periodMetrics.resolutionRate,
 			activity:
 				health.lastActivityAt === null
 					? "No activity yet"

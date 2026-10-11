@@ -20,17 +20,18 @@ export function useProjectSettingsData(projectSlug: string) {
 
 export function useProjectSettingsWrites(projectSlug: string) {
 	const update = useMutation(api.projects.settings.update);
+	const restore = useMutation(api.projects.settings.restore);
 	const [pending, setPending] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const inFlight = useRef(false);
 
-	async function saveSettings(changes: ProjectSettingsUpdate) {
+	async function run(write: () => Promise<null>) {
 		if (inFlight.current) return false;
 		inFlight.current = true;
 		setPending(true);
 		setError(null);
 		try {
-			await update({ projectSlug, changes });
+			await write();
 			return true;
 		} catch (cause) {
 			setError(
@@ -45,5 +46,9 @@ export function useProjectSettingsWrites(projectSlug: string) {
 		}
 	}
 
-	return { pending, error, saveSettings };
+	const saveSettings = (changes: ProjectSettingsUpdate) =>
+		run(() => update({ projectSlug, changes }));
+	const restoreProject = () => run(() => restore({ projectSlug }));
+
+	return { pending, error, saveSettings, restoreProject };
 }

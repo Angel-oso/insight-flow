@@ -4,7 +4,7 @@ import { Check, ChevronsUpDown, FolderKanban, Plus } from "lucide-react";
 import { ConvexError } from "convex/values";
 import { useMutation, useQuery } from "convex/react";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -49,7 +49,7 @@ function getCurrentSection(pathname: string) {
 		: "home";
 }
 
-export function ProjectSwitcher({ project }: { readonly project: Project }) {
+export function ProjectSwitcher({ project }: { readonly project?: Project }) {
 	const pathname = usePathname();
 	const router = useRouter();
 	const projects = useQuery(api.projects.queries.list, {});
@@ -59,14 +59,9 @@ export function ProjectSwitcher({ project }: { readonly project: Project }) {
 	const [description, setDescription] = useState("");
 	const [createError, setCreateError] = useState<string | null>(null);
 	const [isCreating, setIsCreating] = useState(false);
-	const section = getCurrentSection(pathname);
+	const section = project ? getCurrentSection(pathname) : "home";
 
-	const availableProjects = useMemo(() => {
-		const allProjects = projects ?? [];
-		return allProjects.some((candidate) => candidate.slug === project.slug)
-			? allProjects
-			: [...allProjects, project];
-	}, [project, projects]);
+	const availableProjects = projects ?? [];
 
 	const selectProject = (projectSlug: string) => {
 		router.push(projectPath(projectSlug, section));
@@ -75,16 +70,16 @@ export function ProjectSwitcher({ project }: { readonly project: Project }) {
 	const createProject = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		const name = normalizeProjectName(projectName);
-		if (!name || !slugify(name)) return;
+		if (!project || !name || !slugify(name)) return;
 
 		setIsCreating(true);
 		setCreateError(null);
 		try {
-			const project = await create({ name, description });
+			const createdProject = await create({ currentProjectSlug: project.slug, name, description });
 			setIsCreateOpen(false);
 			setProjectName("");
 			setDescription("");
-			selectProject(project.slug);
+			selectProject(createdProject.slug);
 		} catch (cause) {
 			setCreateError(
 				cause instanceof ConvexError
@@ -114,7 +109,7 @@ export function ProjectSwitcher({ project }: { readonly project: Project }) {
 						</span>
 						<span className="grid min-w-0 flex-1 text-left text-sm leading-tight">
 							<span className="truncate font-heading font-semibold tracking-[-0.02em]">
-								{project.name}
+								{project?.name ?? "Select a project"}
 							</span>
 							<span className="truncate text-xs text-sidebar-foreground/70">
 								InsightFlow
@@ -125,6 +120,11 @@ export function ProjectSwitcher({ project }: { readonly project: Project }) {
 					<DropdownMenuContent className="min-w-64 rounded-lg" align="start">
 						<DropdownMenuGroup>
 							<DropdownMenuLabel>Projects</DropdownMenuLabel>
+							{availableProjects.length === 0 ? (
+								<DropdownMenuItem disabled>
+									{projects === undefined ? "Loading projects…" : "No projects available"}
+								</DropdownMenuItem>
+							) : null}
 							{availableProjects.map((candidate) => (
 								<DropdownMenuItem
 									key={candidate.slug}
@@ -142,7 +142,7 @@ export function ProjectSwitcher({ project }: { readonly project: Project }) {
 											{candidate.description}
 										</span>
 									</span>
-									{candidate.slug === project.slug ? (
+									{candidate.slug === project?.slug ? (
 										<Check
 											className="size-4 text-primary"
 											aria-label="Current project"
@@ -153,6 +153,7 @@ export function ProjectSwitcher({ project }: { readonly project: Project }) {
 						</DropdownMenuGroup>
 						<DropdownMenuSeparator />
 						<DropdownMenuItem
+							disabled={!project}
 							onClick={() => setIsCreateOpen(true)}
 							className="gap-2 p-2"
 						>

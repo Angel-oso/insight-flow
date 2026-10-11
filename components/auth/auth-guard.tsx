@@ -1,13 +1,14 @@
 "use client";
 
-import { useConvexAuth } from "convex/react";
+import { ConvexError } from "convex/values";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
-import { useQuery } from "convex/react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 /**
  * Gate for the authenticated app: anonymous visitors go to /login, and
@@ -38,14 +39,24 @@ export function RequireAuth({ children }: { readonly children: ReactNode }) {
 		);
 	}
 	if (!status.hasMembership) {
-		return <NoWorkspaceAccess />;
+		return <NoWorkspaceAccess canCreateWorkspace={status.canCreateWorkspace} />;
 	}
 	return <>{children}</>;
 }
 
-function NoWorkspaceAccess() {
+function NoWorkspaceAccess({
+	canCreateWorkspace,
+}: {
+	readonly canCreateWorkspace: boolean;
+}) {
 	const { signOut } = useAuthActions();
+	const createWorkspace = useMutation(api.setup.mutations.createWorkspace);
+	const router = useRouter();
 	const [isSigningOut, setIsSigningOut] = useState(false);
+	const [workspaceName, setWorkspaceName] = useState("");
+	const [projectName, setProjectName] = useState("");
+	const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
+	const [createError, setCreateError] = useState<string | null>(null);
 
 	async function handleSignOut() {
 		setIsSigningOut(true);
@@ -53,6 +64,24 @@ function NoWorkspaceAccess() {
 			await signOut();
 		} finally {
 			setIsSigningOut(false);
+		}
+	}
+
+	async function handleCreateWorkspace(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setIsCreatingWorkspace(true);
+		setCreateError(null);
+		try {
+			const workspace = await createWorkspace({ name: workspaceName, projectName });
+			router.replace(`/projects/${workspace.projectSlug}/home`);
+		} catch (cause) {
+			setCreateError(
+				cause instanceof ConvexError
+					? cause.message
+					: "Could not create the workspace. Try again.",
+			);
+		} finally {
+			setIsCreatingWorkspace(false);
 		}
 	}
 
@@ -64,8 +93,39 @@ function NoWorkspaceAccess() {
 						No workspace yet
 					</h1>
 					<p className="text-sm leading-6 text-muted-foreground">
-						Your account is signed in, but it does not belong to a workspace yet. Ask a workspace administrator to invite you.
+						{canCreateWorkspace
+							? "Create your first workspace to start collecting and managing feedback. You will be its owner and administrator."
+							: "Your account is signed in, but it does not belong to a workspace yet. Ask a workspace administrator to invite you."}
 					</p>
+					{canCreateWorkspace ? (
+						<form className="mt-3 grid gap-3" onSubmit={handleCreateWorkspace}>
+							<label htmlFor="workspace-name" className="grid gap-2 text-sm font-medium">
+								Organization name
+								<Input
+									id="workspace-name"
+									value={workspaceName}
+									onChange={(event) => setWorkspaceName(event.target.value)}
+									placeholder="e.g. Acme product team"
+									autoFocus
+									maxLength={80}
+									disabled={isCreatingWorkspace}
+									required
+								/>
+							</label>
+							<label htmlFor="first-project-name" className="grid gap-2 text-sm font-medium">
+								First project name
+								<Input id="first-project-name" value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="e.g. Client portal" required maxLength={80} disabled={isCreatingWorkspace} />
+							</label>
+							{createError ? (
+								<p role="alert" className="text-sm text-destructive">
+									{createError}
+								</p>
+							) : null}
+							<Button type="submit" disabled={isCreatingWorkspace}>
+								{isCreatingWorkspace ? "Creating workspace…" : "Create workspace"}
+							</Button>
+						</form>
+					) : null}
 					<Button
 						type="button"
 						variant="outline"
@@ -89,10 +149,13 @@ export function RedirectIfAuthenticated({
 }) {
 	const { isLoading, isAuthenticated } = useConvexAuth();
 	const router = useRouter();
+	const searchParams = useSearchParams();
+	const next = searchParams.get("next");
+	const destination = next?.startsWith("/") && !next.startsWith("//") ? next : "/home";
 
 	useEffect(() => {
-		if (!isLoading && isAuthenticated) router.replace("/home");
-	}, [isLoading, isAuthenticated, router]);
+		if (!isLoading && isAuthenticated) router.replace(destination);
+	}, [destination, isLoading, isAuthenticated, router]);
 
 	if (isLoading || isAuthenticated) {
 		return (

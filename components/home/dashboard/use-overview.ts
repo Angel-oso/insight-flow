@@ -3,11 +3,10 @@
 import { useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { api } from "@/convex/_generated/api";
-import { presentOverview, type PresentedOverview } from "./model";
+import { presentOverview } from "./model";
+import { overviewWindow, utcDate, type OverviewRange } from "./date-window";
 
-export const OVERVIEW_RANGE_DAYS = 30 as const;
-
-function useOverviewClock() {
+export function useOverviewClock() {
 	const [now, setNow] = useState(() => Date.now());
 	useEffect(() => {
 		const timer = setInterval(() => setNow(Date.now()), 60000);
@@ -16,16 +15,18 @@ function useOverviewClock() {
 	return now;
 }
 
-/** Live project overview; undefined while the query loads. */
-export function useProjectOverview(
-	projectSlug: string,
-): PresentedOverview | undefined {
+/** Invalid URL dates never reach Convex; presets refresh once per minute. */
+export function useProjectOverview(projectSlug: string, range: OverviewRange, fromDate: string, toDate: string) {
 	const now = useOverviewClock();
-	const data = useQuery(api.dashboard.overview.get, {
-		projectSlug,
-		rangeDays: OVERVIEW_RANGE_DAYS,
-		now,
-	});
-	if (!data) return undefined;
-	return presentOverview(data, data.project.name, now);
+	const window = overviewWindow(range, fromDate, toDate, now);
+	const data = useQuery(api.dashboard.overview.get, window ? {
+		projectSlug, from: window.from, to: window.to,
+	} : "skip");
+	return {
+		overview: data ? presentOverview(data, data.project.name, now) : undefined,
+		rangeLabel: window?.label ?? "Custom dates",
+		today: utcDate(now),
+		defaultFrom: utcDate(now - 29 * 86_400_000),
+		error: window ? null : "Choose valid dates through today, covering no more than 365 days.",
+	};
 }

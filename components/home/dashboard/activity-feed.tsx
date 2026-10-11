@@ -1,5 +1,7 @@
 import { Check, Circle, MessageSquare, MoveRight } from "lucide-react";
 
+import Link from "next/link";
+import { projectPath } from "@/lib/projects";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import type { OverviewActivity } from "./model";
@@ -50,7 +52,7 @@ export function ActivityFeed({
 									<div className="min-w-0 flex-1">
 										<p className="text-sm leading-5">
 											<span className="font-semibold">{activity.actor}</span>{" "}
-											{activity.action}
+											{activity.projectSlug ? <Link className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-primary" href={activity.feedbackId ? `${projectPath(activity.projectSlug, "feedback")}?feedback=${activity.feedbackId}` : projectPath(activity.projectSlug, "home")}>{activity.action}</Link> : activity.action}
 										</p>
 										<p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
 											<ActivityIcon className="size-3" />

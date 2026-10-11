@@ -4,29 +4,18 @@ import type { Id } from "@/convex/_generated/dataModel";
 
 export type TeamQueryData = FunctionReturnType<typeof api.team.queries.get>;
 
-export type MemberRole = "Administrator" | "Manager" | "Member";
-
-const roleLabels: Record<string, MemberRole> = {
-	admin: "Administrator",
-	manager: "Manager",
-	member: "Member",
-};
-
-export const memberRoles: readonly MemberRole[] = [
-	"Administrator",
-	"Manager",
-	"Member",
-];
+export type MemberRole = string;
 
 export type TeamMember = {
 	readonly id: Id<"users">;
+	readonly roleId: Id<"roles">;
 	readonly name: string;
 	readonly email: string;
 	readonly initials: string;
 	readonly role: MemberRole;
-	readonly projectCount: number;
-	readonly openAssigned: number;
-	readonly criticalAssigned: number;
+	readonly projectCount: number | null;
+	readonly openAssigned: number | null;
+	readonly criticalAssigned: number | null;
 	readonly lastActivity: string;
 	readonly joined: string;
 };
@@ -43,6 +32,8 @@ export type TeamSummaryData = {
 
 export type PresentedTeam = {
 	readonly summary: TeamSummaryData;
+	/** False for callers who cannot assign work: no per-person workload. */
+	readonly showsWorkload: boolean;
 	readonly members: readonly TeamMember[];
 };
 
@@ -66,17 +57,20 @@ function relativeTime(timestamp: number, now: number) {
 export function presentTeam(data: TeamQueryData, now: number): PresentedTeam {
 	return {
 		summary: { ...data.summary },
+		showsWorkload: data.showsWorkload,
 		members: data.members.map((member) => ({
 			id: member.id,
+			roleId: member.roleId,
 			name: member.name,
 			email: member.email,
 			initials: initials(member.name),
-			role: roleLabels[member.role] ?? "Member",
+			role: member.role,
 			projectCount: member.projectCount,
 			openAssigned: member.openAssigned,
 			criticalAssigned: member.criticalAssigned,
-			lastActivity:
-				member.lastActivityAt === null
+			lastActivity: !data.showsWorkload
+				? ""
+				: member.lastActivityAt === null
 					? "No recorded activity"
 					: relativeTime(member.lastActivityAt, now),
 			joined: `Joined ${new Date(member.joinedAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}`,
