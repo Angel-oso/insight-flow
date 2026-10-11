@@ -8,15 +8,31 @@ import { DecisionBrief } from "./decision-brief";
 import { MetricSummary } from "./metric-summary";
 import { StatusPanel } from "./status-panel";
 import { TrendPanel } from "./trend-panel";
-import { useProjectOverview } from "./use-overview";
+import { parseAsNumberLiteral, useQueryState } from "nuqs";
+import {
+	OVERVIEW_RANGES,
+	type OverviewRange,
+	useProjectOverview,
+} from "./use-overview";
 
 export function Dashboard({ project }: { readonly project: Project }) {
-	const overview = useProjectOverview(project.slug);
+	const [rangeDays, setRangeDays] = useQueryState(
+		"range",
+		parseAsNumberLiteral(OVERVIEW_RANGES).withDefault(30),
+	);
+	const overview = useProjectOverview(project.slug, rangeDays);
+	const header = (
+		<DashboardHeader
+			project={project}
+			rangeDays={rangeDays}
+			onRangeChange={(range: OverviewRange) => void setRangeDays(range)}
+		/>
+	);
 
 	if (!overview) {
 		return (
 			<div className="mx-auto w-full max-w-[1520px] px-4 py-7 sm:px-6 sm:py-9 lg:px-8 xl:px-10 xl:py-10">
-				<DashboardHeader project={project} />
+				{header}
 				<p role="status" className="mt-7 text-muted-foreground">
 					Loading overview…
 				</p>
@@ -26,7 +42,7 @@ export function Dashboard({ project }: { readonly project: Project }) {
 
 	return (
 		<div className="mx-auto w-full max-w-[1520px] px-4 py-7 sm:px-6 sm:py-9 lg:px-8 xl:px-10 xl:py-10">
-			<DashboardHeader project={project} />
+			{header}
 			<div className="mt-7 space-y-6">
 				<DecisionBrief project={project} criticalItems={overview.health.critical} laneLabel={overview.criticalLabel} />
 				<MetricSummary metrics={overview.metrics} health={overview.health} />

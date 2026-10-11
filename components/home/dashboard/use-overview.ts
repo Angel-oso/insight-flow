@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import { api } from "@/convex/_generated/api";
 import { presentOverview, type PresentedOverview } from "./model";
 
-export const OVERVIEW_RANGE_DAYS = 30 as const;
+export const OVERVIEW_RANGES = [7, 30, 90] as const;
+export type OverviewRange = (typeof OVERVIEW_RANGES)[number];
 
 function useOverviewClock() {
 	const [now, setNow] = useState(() => Date.now());
@@ -19,11 +20,12 @@ function useOverviewClock() {
 /** Live project overview; undefined while the query loads. */
 export function useProjectOverview(
 	projectSlug: string,
+	rangeDays: OverviewRange,
 ): PresentedOverview | undefined {
 	const now = useOverviewClock();
 	const data = useQuery(api.dashboard.overview.get, {
 		projectSlug,
-		rangeDays: OVERVIEW_RANGE_DAYS,
+		rangeDays,
 		now,
 	});
 	if (!data) return undefined;
