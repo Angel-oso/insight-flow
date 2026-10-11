@@ -1,10 +1,19 @@
 import { ConvexError } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
-import type { MutationCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { getTaxonomies } from "../taxonomies/lib";
 import { PROJECT_FEEDBACK_LIMIT } from "./access";
 
 /** Shared, transactional creation for public intake and team logging. */
+/** Whether a project can take one more item without breaking its readers. */
+export async function hasInboxCapacity(ctx: QueryCtx, projectId: Id<"projects">) {
+	const existing = await ctx.db
+		.query("feedback")
+		.withIndex("by_projectId_receivedAt", (q) => q.eq("projectId", projectId))
+		.take(PROJECT_FEEDBACK_LIMIT);
+	return existing.length < PROJECT_FEEDBACK_LIMIT;
+}
+
 export async function insertFeedback(ctx: MutationCtx, input: {
 	project: Doc<"projects">;
 	title: string;
@@ -43,12 +52,8 @@ export async function insertFeedback(ctx: MutationCtx, input: {
 
 	// Every project view reads at most PROJECT_FEEDBACK_LIMIT items, so intake
 	// stops there instead of letting anonymous traffic break the team's views.
-	const existing = await ctx.db
-		.query("feedback")
-		.withIndex("by_projectId_receivedAt", (q) => q.eq("projectId", input.project._id))
-		.take(PROJECT_FEEDBACK_LIMIT);
-	if (existing.length >= PROJECT_FEEDBACK_LIMIT)
-		throw new ConvexError("This project's inbox is full. Close or discard older feedback first.");
+	if (!(await hasInboxCapacity(ctx, input.project._id)))
+		throw new ConvexError(`This project's inbox has reached its ${PROJECT_FEEDBACK_LIMIT}-item limit.`);
 
 	const now = Date.now();
 	const feedbackId = await ctx.db.insert("feedback", {

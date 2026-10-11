@@ -127,8 +127,11 @@ test("a full inbox rejects new submissions so the team's views keep working", as
 		}
 	});
 	const before = await stored(t);
+	await expect(t.query(form, { projectSlug: valid.projectSlug })).resolves.toMatchObject({
+		accepting: false,
+	});
 	await expect(t.mutation(submit, valid)).rejects.toThrow(
-		"This project's inbox is full. Close or discard older feedback first.",
+		"This project's inbox has reached its 200-item limit.",
 	);
 	const after = await stored(t);
 	expect(after.feedback).toHaveLength(before.feedback.length);

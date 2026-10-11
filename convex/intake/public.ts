@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "../_generated/server";
-import { insertFeedback } from "../feedback/create";
+import { hasInboxCapacity, insertFeedback } from "../feedback/create";
 import { getTaxonomies } from "../taxonomies/lib";
 
 export const form = query({
@@ -18,7 +18,10 @@ export const form = query({
 		return {
 			name: project.name,
 			description: project.description,
-			accepting: project.status === "Active" && project.inboxEnabled,
+			accepting:
+				project.status === "Active" &&
+				project.inboxEnabled &&
+				(await hasInboxCapacity(ctx, project._id)),
 			categories: [...categories].sort((a, b) => a.rank - b.rank).map((item) => ({
 				value: item.value,
 				label: item.label,
