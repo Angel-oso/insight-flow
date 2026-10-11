@@ -246,7 +246,16 @@ The form language is gently geometric: compact controls use the large control ra
 
 ### Navigation
 
-Desktop navigation is a quiet cool sidebar with one soft indigo current-state row, concise group labels, and clear keyboard focus. It collapses to an icon rail with tooltips and reopens through the persistent header trigger. Mobile uses that same trigger to open an off-canvas sheet, keeping destinations and account access consistent without duplicating navigation.
+The sidebar reads top to bottom as product → organization → project → person:
+
+- **Header:** the logo at full size (28px tile) and the wordmark, with the collapse toggle on the right.
+- **Organization group:** labelled with the organization's name; Workspace and, for administrators only, Organization settings.
+- **Project group:** the project switcher (a bordered control with the project's initial on a tinted tile) sits directly above that project's sections: Overview, Feedback, Team, Settings.
+- **Footer:** the signed-in person (round avatar; people are round, projects are square).
+
+Rows are 36px with 16px muted icons (`components/layout/sidebar/sidebar-item.ts`). The current row carries three cues, never color alone: the `sidebar-accent` background, a primary-colored icon, and medium weight. Collapsed, it becomes a 48px icon rail: logo, a short rule between the organization and project tiers, the project initial, section icons, and the avatar; every row keeps its tooltip. The logo is the expand control on the rail: on hover or keyboard focus the mark gives way to the expand icon with an "Expand sidebar" tooltip (`components/layout/sidebar/sidebar-brand.tsx`). On mobile there is no bottom bar: the compact header's trigger opens the same content as an off-canvas sheet.
+
+In dark mode the sidebar tokens come from the app palette (blue-gray `oklch(0.205 0.014 264)` with the violet primary), not shadcn's neutral grays.
 
 ### Decision Brief
 
@@ -281,3 +290,50 @@ Charts, attention queues, activity, and project health share aligned headers, co
 - Don't use red, amber, green, blue, or cyan as decoration detached from operational meaning.
 - Don't squeeze desktop tables, sidebars, or multi-column controls into the mobile viewport.
 - Don't introduce highly pill-shaped controls, oversized radii, gradients, or ornamental effects that weaken the calm briefing character.
+
+## Logo
+
+The mark is an indigo tile (`oklch(0.49 0.2 276)`, the app's primary) holding three white bars that narrow into one: scattered feedback funnelled into a decision. It stays the same in light and dark themes.
+
+- Component: `components/brand/logo.tsx` (`LogoMark`, and `Logo` with the wordmark, which inherits the surrounding font).
+- Files: `app/icon.svg` (favicon) and `public/logo.svg` (same geometry, hex `#4949ce`).
+- Used in: the landing (navigation, closing section, footer), the sign-in and sign-up panel, the sidebar header (links to the workspace and collapses to the mark), the mobile app header, the no-workspace onboarding, invitations, and the public form's "Powered by InsightFlow".
+- Pass `title` to `LogoMark` when it stands alone; omit it when the wordmark follows.
+
+## Public Landing (`/`)
+
+The landing takes its layout language from nextjs.org and vercel.com (framed hero, Geist display type, bento grid, product windows) and renders it in the app's own palette. Everything is scoped under the `.landing` class in `app/globals.css`, and every `lp-*` token points at an app token, so the landing follows the visitor's light or dark theme exactly like the app.
+
+### Palette
+
+| Token | Maps to | Role |
+| --- | --- | --- |
+| `lp-bg` | `dashboard-canvas` | Page ground: warm canvas in light, deep blue-gray in dark |
+| `lp-fg` | `foreground` | Text |
+| `lp-muted` | `muted-foreground` | Body copy |
+| `lp-subtle` | blue-gray `oklch(0.62 0.022 264)` | Quiet half of two-tone headings, labels |
+| `lp-line` / `lp-line-strong` | `border` / a darker blue-gray hairline | Hairlines, window borders |
+| `lp-surface` / `lp-surface-2` | `card` / `muted` | Cards and mockup windows / active rows |
+| `lp-accent` (+ `-fg`, `-soft`) | `dashboard-primary` (+ `dashboard-primary-soft`) | Primary buttons, call-to-action card, chart bars, workflow pulse, glow |
+
+Status, priority, and health chips inside mockups reuse the app's `dashboard-*` tokens.
+
+### Type
+
+Geist (`font-display`, loaded as `--font-geist-sans`) for everything; Geist Mono only for real data (the public link path, "Example data" labels).
+
+- Display: 44 → 72 → 84px, weight 600, tracking -0.04em, leading 1.02.
+- Section headings: 30 → 40–44px, weight 600, tracking -0.035em; often two-tone (`lp-fg` then `lp-subtle`).
+- Card titles 17px / 600 / -0.02em; body 14–20px in `lp-muted`.
+- Mockup text runs 10–13px to read as a scaled-down product window.
+
+### Components
+
+- **Buttons:** pill (`rounded-full`, 44–48px) solid `lp-accent` primary first with a soft indigo shadow, outline secondary on `lp-surface`; nav buttons are 32px `rounded-md`.
+- **Mock window:** `rounded-xl`, `lp-line-strong` border, one soft offset shadow, a 40px title bar with the window title and a mono "Example data" label. Every mockup is illustrative and says so.
+- **Hero frame:** hairline rules with crosshair corner marks around the title, as on nextjs.org; a blurred `--lp-glow` light behind the live inbox.
+- **Bento grid:** `lp-surface` cards with hairline borders, three illustrated (drawn in code), five text-only, one indigo call-to-action card.
+
+### Motion
+
+One authored moment: in the hero inbox a new item arrives every 3.4s (blur and slide in, then a fading highlight) while older items advance through the lifecycle and the counters and health chip recompute. A light pulse travels the workflow line. Both pause off-screen, stop when the tab is hidden, and are disabled under `prefers-reduced-motion`.

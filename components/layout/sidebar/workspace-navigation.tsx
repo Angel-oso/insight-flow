@@ -8,15 +8,14 @@ import {
 	projectNavigation,
 } from "@/components/layout/project-navigation";
 import {
-	SidebarGroup,
-	SidebarGroupContent,
-	SidebarGroupLabel,
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { projectPath } from "@/lib/projects";
+import { sidebarItemClass } from "./sidebar-item";
 
+/** The current project's sections; rendered under its switcher. */
 export function WorkspaceNavigation({
 	projectSlug,
 }: {
@@ -25,34 +24,30 @@ export function WorkspaceNavigation({
 	const pathname = usePathname();
 
 	return (
-		<SidebarGroup>
-			<SidebarGroupLabel>Project</SidebarGroupLabel>
-			<SidebarGroupContent>
-				<SidebarMenu>
-					{projectNavigation.map((item) => {
-						const href = projectPath(projectSlug, item.section);
-						const isActive = isProjectSectionActive(pathname, href);
+		<SidebarMenu aria-label="Project sections">
+			{projectNavigation.map((item) => {
+				const href = projectPath(projectSlug, item.section);
+				const isActive = isProjectSectionActive(pathname, href);
 
-						return (
-							<SidebarMenuItem key={item.label}>
-								<SidebarMenuButton
-									isActive={isActive}
-									tooltip={item.label}
-									render={
-										<Link
-											href={href}
-											aria-current={isActive ? "page" : undefined}
-										/>
-									}
-								>
-									<item.icon />
-									<span>{item.label}</span>
-								</SidebarMenuButton>
-							</SidebarMenuItem>
-						);
-					})}
-				</SidebarMenu>
-			</SidebarGroupContent>
-		</SidebarGroup>
+				return (
+					<SidebarMenuItem key={item.label}>
+						<SidebarMenuButton
+							isActive={isActive}
+							tooltip={item.label}
+							className={sidebarItemClass}
+							render={
+								<Link
+									href={href}
+									aria-current={isActive ? "page" : undefined}
+								/>
+							}
+						>
+							<item.icon />
+							<span>{item.label}</span>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
+				);
+			})}
+		</SidebarMenu>
 	);
 }

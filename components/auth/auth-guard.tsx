@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardHeader } from "@/components/ui/card";
+import { LogoMark } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -89,6 +90,7 @@ function NoWorkspaceAccess({
 		<div className="mx-auto flex min-h-dvh w-full max-w-md items-center px-4 py-10">
 			<Card className="w-full">
 				<CardHeader className="gap-1 pb-6">
+					<LogoMark title="InsightFlow" className="mb-3 size-10" />
 					<h1 className="font-heading text-xl font-semibold tracking-[-0.02em]">
 						No workspace yet
 					</h1>

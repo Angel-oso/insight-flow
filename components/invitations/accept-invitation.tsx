@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { api } from "@/convex/_generated/api";
+import { LogoMark } from "@/components/brand/logo";
 import { projectPath } from "@/lib/projects";
 
 export function AcceptInvitation({ token }: { readonly token: string }) {
@@ -91,6 +92,7 @@ function InvitationCard({ title, children }: { readonly title: string; readonly 
 		<div className="mx-auto flex min-h-dvh w-full max-w-md items-center px-4 py-10">
 			<Card className="w-full">
 				<CardHeader>
+					<LogoMark title="InsightFlow" className="mb-3 size-10" />
 					<h1 className="font-heading text-xl font-semibold tracking-[-0.02em]">{title}</h1>
 				</CardHeader>
 				<CardContent className="space-y-4">{children}</CardContent>

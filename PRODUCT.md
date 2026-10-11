@@ -253,7 +253,7 @@ It must not expose organization settings, broad team-performance comparisons, or
 - Team management.
 - Organization settings.
 
-On desktop, use a persistent sidebar. On mobile, use a compact header and bottom navigation; data tables should become readable cards or focused list rows rather than a squeezed desktop table.
+On desktop, use a persistent sidebar. On mobile, use a compact header that opens the same navigation as a side sheet (no bottom bar); data tables should become readable cards or focused list rows rather than a squeezed desktop table.
 
 ## Design direction
 
