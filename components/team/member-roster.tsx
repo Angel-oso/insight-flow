@@ -80,7 +80,7 @@ function RemoveMember({
 	return (
 		<div className="flex flex-wrap items-center justify-end gap-1.5">
 			<span className="text-xs text-muted-foreground">
-				{member.openAssigned > 0
+				{member.openAssigned
 					? `${member.openAssigned} open ${member.openAssigned === 1 ? "item returns" : "items return"} to unassigned.`
 					: "Remove from project?"}
 			</span>
@@ -123,7 +123,9 @@ export function MemberRoster({
 	canManageRoles,
 	canManageTeam,
 	currentUserId,
+	showsWorkload,
 }: {
+	readonly showsWorkload: boolean;
 	readonly members: readonly TeamMember[];
 	readonly projectSlug: string;
 	readonly roles: readonly ProjectRole[];
@@ -182,7 +184,9 @@ export function MemberRoster({
 							People and workload
 						</h2>
 						<p className="mt-1 text-sm text-muted-foreground">
-							Assignments reflect the current open feedback queue.
+							{showsWorkload
+								? "Assignments reflect the current open feedback queue."
+								: "Who works on this project and their role."}
 						</p>
 					</div>
 					<p className="text-sm text-muted-foreground">
@@ -227,9 +231,15 @@ export function MemberRoster({
 								<tr>
 									<th className="px-5 py-3 font-medium">Member</th>
 									<th className="px-5 py-3 font-medium">Access</th>
-									<th className="px-5 py-3 font-medium">Scope</th>
-									<th className="px-5 py-3 text-right font-medium">Open</th>
-									<th className="px-5 py-3 font-medium">Last activity</th>
+									{showsWorkload ? (
+										<>
+											<th className="px-5 py-3 font-medium">Scope</th>
+											<th className="px-5 py-3 text-right font-medium">Open</th>
+											<th className="px-5 py-3 font-medium">Last activity</th>
+										</>
+									) : (
+										<th className="px-5 py-3 font-medium">Joined</th>
+									)}
 									{canManageTeam ? (
 										<th className="px-5 py-3 text-right font-medium">
 											<span className="sr-only">Actions</span>
@@ -253,24 +263,30 @@ export function MemberRoster({
 												</select>
 											) : <RoleBadge role={member.role} />}
 										</td>
-										<td className="px-5 py-4 text-muted-foreground">
-											{member.projectCount}{" "}
-											{member.projectCount === 1 ? "project" : "projects"}
-										</td>
-										<td className="px-5 py-4 text-right tabular-nums">
-											<p className="font-medium">{member.openAssigned}</p>
-											<p className="mt-0.5 text-xs text-muted-foreground">
-												{member.criticalAssigned > 0
-													? `${member.criticalAssigned} critical`
-													: "No critical items"}
-											</p>
-										</td>
-										<td className="px-5 py-4">
-											<p>{member.lastActivity}</p>
-											<p className="mt-0.5 text-xs text-muted-foreground">
-												{member.joined}
-											</p>
-										</td>
+										{showsWorkload ? (
+											<>
+												<td className="px-5 py-4 text-muted-foreground">
+													{member.projectCount}{" "}
+													{member.projectCount === 1 ? "project" : "projects"}
+												</td>
+												<td className="px-5 py-4 text-right tabular-nums">
+													<p className="font-medium">{member.openAssigned}</p>
+													<p className="mt-0.5 text-xs text-muted-foreground">
+														{member.criticalAssigned
+															? `${member.criticalAssigned} critical`
+															: "No critical items"}
+													</p>
+												</td>
+												<td className="px-5 py-4">
+													<p>{member.lastActivity}</p>
+													<p className="mt-0.5 text-xs text-muted-foreground">
+														{member.joined}
+													</p>
+												</td>
+											</>
+										) : (
+											<td className="px-5 py-4 text-muted-foreground">{member.joined}</td>
+										)}
 										{canManageTeam ? (
 											<td className="px-5 py-4 text-right">
 												{canRemove(member) ? (
@@ -297,6 +313,7 @@ export function MemberRoster({
 										</select>
 									) : <RoleBadge role={member.role} />}
 								</div>
+								{showsWorkload ? (
 								<div className="grid grid-cols-2 gap-4 border-t pt-4 text-sm">
 									<div>
 										<p className="text-xs text-muted-foreground">Scope</p>
@@ -311,14 +328,16 @@ export function MemberRoster({
 										</p>
 										<p className="mt-1 font-medium tabular-nums">
 											{member.openAssigned}
-											{member.criticalAssigned > 0
+											{member.criticalAssigned
 												? ` · ${member.criticalAssigned} critical`
 												: " · no critical"}
 										</p>
 									</div>
 								</div>
+								) : null}
 								<p className="text-xs text-muted-foreground">
-									Last activity {member.lastActivity} · {member.joined}
+									{showsWorkload ? `Last activity ${member.lastActivity} · ` : ""}
+									{member.joined}
 								</p>
 								{canRemove(member) ? (
 									<RemoveMember member={member} projectSlug={projectSlug} onError={setRoleError} />

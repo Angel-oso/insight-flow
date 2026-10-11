@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import { hasCapability } from "../../lib/auth/permissions";
 import { resolveProjectAccess } from "../access/roles";
 import { listProjectFeedback, requireCapability, requireProject } from "../feedback/access";
 import { getFinalStatuses, getPriorityRanks, getTaxonomies } from "../taxonomies/lib";
@@ -26,6 +27,7 @@ export const get = query({
 			criticalLabel: v.union(v.string(), v.null()),
 			criticalColor: v.union(v.string(), v.null()),
 		}),
+		showsWorkload: v.boolean(),
 		members: v.array(
 			v.object({
 				id: v.id("users"),
@@ -33,9 +35,11 @@ export const get = query({
 				name: v.string(),
 				email: v.string(),
 				role: schema.tables.roles.validator.fields.name,
-				projectCount: v.number(),
-				openAssigned: v.number(),
-				criticalAssigned: v.number(),
+				// Per-person workload is null unless the caller can assign work
+				// (PRODUCT.md: members never get team-performance comparisons).
+				projectCount: v.union(v.number(), v.null()),
+				openAssigned: v.union(v.number(), v.null()),
+				criticalAssigned: v.union(v.number(), v.null()),
 				lastActivityAt: v.union(v.number(), v.null()),
 				joinedAt: v.number(),
 			}),
@@ -44,6 +48,7 @@ export const get = query({
 	handler: async (ctx, { projectSlug }) => {
 		const { project, access } = await requireProject(ctx, projectSlug);
 		requireCapability(access.permissions, "team.view");
+		const showsWorkload = hasCapability(access.permissions, "feedback.assign");
 		const projectId: Id<"projects"> = project._id;
 
 		const links = await ctx.db
@@ -125,6 +130,17 @@ export const get = query({
 				b.criticalAssigned - a.criticalAssigned ||
 				a.name.localeCompare(b.name),
 		);
+		const visibleMembers = showsWorkload
+			? members
+			: members
+					.map((member) => ({
+						...member,
+						projectCount: null,
+						openAssigned: null,
+						criticalAssigned: null,
+						lastActivityAt: null,
+					}))
+					.sort((a, b) => a.name.localeCompare(b.name));
 
 		const coordinatorCount = members.filter((member) => member.role !== "member").length;
 		const openAssigned = members.reduce((total, member) => total + member.openAssigned, 0);
@@ -144,7 +160,8 @@ export const get = query({
 				criticalLabel,
 				criticalColor,
 			},
-			members,
+			showsWorkload,
+			members: visibleMembers,
 		};
 	},
 });

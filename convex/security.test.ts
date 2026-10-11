@@ -1127,3 +1127,29 @@ test("accepting an invitation repairs a missing organization membership", async 
 	});
 	expect(workspace.role).toBe("member");
 });
+
+test("members see the team roster but never per-person workload comparisons", async () => {
+	const { t, ids } = await seedTestWorkspace();
+	await t.mutation(internal.setup.admin.seedAccessCatalog, {});
+	await t.run((ctx) => ctx.db.patch("feedback", ids.itemId, { assigneeId: ids.manager }));
+	const member = t.withIdentity({ subject: ids.member });
+	const manager = t.withIdentity({ subject: ids.manager });
+
+	const asMember = await member.query(api.team.queries.get, { projectSlug: "client-portal" });
+	expect(asMember.showsWorkload).toBe(false);
+	expect(asMember.members.map((row) => row.name)).toEqual(
+		[...asMember.members.map((row) => row.name)].sort((a, b) => a.localeCompare(b)),
+	);
+	for (const row of asMember.members) {
+		expect(row).toMatchObject({
+			openAssigned: null,
+			criticalAssigned: null,
+			lastActivityAt: null,
+			projectCount: null,
+		});
+	}
+
+	const asManager = await manager.query(api.team.queries.get, { projectSlug: "client-portal" });
+	expect(asManager.showsWorkload).toBe(true);
+	expect(asManager.members.find((row) => row.id === ids.manager)?.openAssigned).toBe(1);
+});

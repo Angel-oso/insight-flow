@@ -43,6 +43,7 @@ export function Team({ project }: { readonly project: Project }) {
 					canManageRoles={roleSettings?.canManageRoles ?? false}
 					canManageTeam={canManageTeam}
 					currentUserId={viewer?.id ?? null}
+					showsWorkload={team.showsWorkload}
 				/>
 			</div>
 			<footer className="mt-8 border-t pt-5 text-xs text-muted-foreground">
