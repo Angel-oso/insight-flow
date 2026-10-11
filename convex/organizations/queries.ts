@@ -5,6 +5,27 @@ import { listProjectFeedback, requireProject, requireUserId } from "../feedback/
 import { getFinalStatuses, getPriorityRanks } from "../taxonomies/lib";
 import { projectHealth } from "../dashboard/health";
 import { requireOrganization } from "./access";
+import schema from "../schema";
+
+const healthStatus = v.union(v.literal("At risk"), v.literal("Needs attention"), v.literal("Healthy"));
+const periodMetrics = v.object({
+	received: v.number(), receivedPrevious: v.number(), open: v.number(), critical: v.number(),
+	completedInRange: v.number(), completedPrevious: v.number(), total: v.number(),
+});
+const projectSummary = v.object({
+	slug: v.string(), name: v.string(), description: v.string(),
+	status: schema.tables.projects.validator.fields.status, open: v.number(), critical: v.number(),
+});
+const projectHealthRow = v.object({
+	slug: v.string(), name: v.string(), received: v.number(), open: v.number(), critical: v.number(),
+	completed: v.number(), total: v.number(), resolutionRate: v.number(),
+	latestActivityAt: v.number(), health: healthStatus,
+});
+const organizationActivity = v.object({
+	id: v.id("activities"), feedbackId: v.union(v.id("feedback"), v.null()), actor: v.string(),
+	projectName: v.string(), projectSlug: v.string(), message: v.string(), createdAt: v.number(),
+	type: schema.tables.activities.validator.fields.type,
+});
 
 export const ORGANIZATION_PROJECT_LIMIT = 50;
 const dayMs = 86_400_000;
@@ -16,6 +37,9 @@ function inRange(at: number | undefined, start: number, end: number) {
 
 export const mine = query({
 	args: {},
+	returns: v.array(v.object({
+		id: v.id("organizations"), name: v.string(), slug: v.string(), isAdmin: v.boolean(),
+	})),
 	handler: async (ctx) => {
 		const userId = await requireUserId(ctx);
 		const memberships = await ctx.db.query("organizationMembers")
@@ -40,12 +64,23 @@ export const mine = query({
 /** The first visible project determines the default organization in the UI. */
 export const organizationForProject = query({
 	args: { projectSlug: v.string() },
+	returns: v.id("organizations"),
 	handler: async (ctx, { projectSlug }) =>
 		(await requireProject(ctx, projectSlug)).project.organizationId,
 });
 
 export const overview = query({
 	args: { organizationId: v.id("organizations"), from: v.number(), to: v.number() },
+	returns: v.object({
+		organization: v.object({ id: v.id("organizations"), name: v.string() }),
+		projects: v.array(projectSummary),
+		// Organization-wide data reaches organization administrators only.
+		admin: v.union(v.null(), v.object({
+			metrics: periodMetrics,
+			health: v.array(projectHealthRow),
+			activities: v.array(organizationActivity),
+		})),
+	}),
 	handler: async (ctx, { organizationId, from, to }) => {
 		const { userId, isAdmin, organization } = await requireOrganization(ctx, organizationId);
 		if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to || to - from > 365 * dayMs) {
@@ -158,6 +193,10 @@ export const overview = query({
 
 export const settings = query({
 	args: { organizationId: v.id("organizations") },
+	returns: v.object({
+		name: v.string(), ownerName: v.string(), ownerId: v.id("users"), isOwner: v.boolean(),
+		eligibleAdmins: v.array(v.object({ id: v.id("users"), name: v.string() })),
+	}),
 	handler: async (ctx, { organizationId }) => {
 		const { userId, organization } = await requireOrganization(ctx, organizationId, true);
 		const memberships = await ctx.db.query("organizationMembers")

@@ -5,6 +5,7 @@ import { requireOrganization } from "./access";
 
 export const rename = mutation({
 	args: { organizationId: v.id("organizations"), name: v.string() },
+	returns: v.null(),
 	handler: async (ctx, { organizationId, name: rawName }) => {
 		await requireOrganization(ctx, organizationId, true);
 		const name = rawName.trim().replace(/\s+/g, " ");
@@ -16,6 +17,7 @@ export const rename = mutation({
 
 export const transferOwnership = mutation({
 	args: { organizationId: v.id("organizations"), userId: v.id("users") },
+	returns: v.null(),
 	handler: async (ctx, { organizationId, userId: targetId }) => {
 		const { userId, organization } = await requireOrganization(ctx, organizationId, true);
 		if (organization.ownerId !== userId) throw new ConvexError("Only the current owner can transfer ownership.");
