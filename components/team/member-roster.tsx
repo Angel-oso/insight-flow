@@ -7,6 +7,13 @@ import { useMemo, useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { api } from "@/convex/_generated/api";
 import type { FunctionReturnType } from "convex/server";
 import type { MemberRole, TeamMember } from "./model";
@@ -91,6 +98,38 @@ function RemoveMember({
 				Cancel
 			</Button>
 		</div>
+	);
+}
+
+function RoleSelect({
+	member,
+	roles,
+	disabled,
+	onChange,
+}: {
+	readonly member: TeamMember;
+	readonly roles: readonly ProjectRole[];
+	readonly disabled: boolean;
+	readonly onChange: (roleId: ProjectRole["id"]) => void;
+}) {
+	return (
+		<Select
+			items={roles.map((role) => ({ value: role.id, label: role.name }))}
+			value={member.roleId}
+			disabled={disabled}
+			onValueChange={(value) => value && onChange(value)}
+		>
+			<SelectTrigger size="sm" aria-label={`Change role for ${member.name}`} className="min-w-28 capitalize">
+				<SelectValue />
+			</SelectTrigger>
+			<SelectContent>
+				{roles.map((role) => (
+					<SelectItem key={role.id} value={role.id} className="capitalize">
+						{role.name}
+					</SelectItem>
+				))}
+			</SelectContent>
+		</Select>
 	);
 }
 
@@ -258,9 +297,7 @@ export function MemberRoster({
 										</td>
 										<td className="px-5 py-4">
 											{canManageRoles ? (
-												<select aria-label={`Change role for ${member.name}`} value={member.roleId} disabled={changingMemberId === member.id} onChange={(event) => void changeRole(member, event.target.value as ProjectRole["id"])} className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm">
-													{roles.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
-												</select>
+												<RoleSelect member={member} roles={roles} disabled={changingMemberId === member.id} onChange={(roleId) => void changeRole(member, roleId)} />
 											) : <RoleBadge role={member.role} />}
 										</td>
 										{showsWorkload ? (
@@ -308,9 +345,7 @@ export function MemberRoster({
 								<div className="flex items-start justify-between gap-4">
 									<MemberIdentity member={member} index={index} />
 									{canManageRoles ? (
-										<select aria-label={`Change role for ${member.name}`} value={member.roleId} disabled={changingMemberId === member.id} onChange={(event) => void changeRole(member, event.target.value as ProjectRole["id"])} className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm">
-											{roles.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
-										</select>
+										<RoleSelect member={member} roles={roles} disabled={changingMemberId === member.id} onChange={(roleId) => void changeRole(member, roleId)} />
 									) : <RoleBadge role={member.role} />}
 								</div>
 								{showsWorkload ? (
