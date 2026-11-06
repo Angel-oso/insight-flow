@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { AuthCard, AuthSwitchLink } from "@/components/auth/auth-card";
+import { AuthCard } from "@/components/auth/auth-card";
+import { AuthSwitchLink } from "@/components/auth/auth-switch-link";
 import { SignupForm } from "@/components/auth/signup-form";
 
 export const metadata: Metadata = {

@@ -8,17 +8,18 @@
  * and minimal taxonomies per test. Runs fully in-memory (convex-test); no network,
  * no real OAuth.
  */
-import { convexTest } from "convex-test";
+import { newConvexTest } from "../test/convex-test";
 import { expect, test } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { capabilities, type Capability, type Role } from "../lib/auth/permissions";
 import schema from "./schema";
+import { insertFeedbackRow, patchFeedbackRow } from "./feedback/store";
 
 const modules = import.meta.glob("./**/*.ts");
 
 async function seedTestWorkspace() {
-	const t = convexTest(schema, modules);
+	const t = newConvexTest(modules);
 	const ids = await t.run(async (ctx) => {
 		const now = Date.now();
 		const permissionIds = new Map<Capability, Id<"permissions">>();
@@ -111,7 +112,7 @@ async function seedTestWorkspace() {
 		await link(portal, member);
 		await link(academyProject, admin);
 		await link(academyProject, academy);
-		const itemId = await ctx.db.insert("feedback", {
+		const itemId = await insertFeedbackRow(ctx, {
 			projectId: portal,
 			title: "Login fails on retry",
 			description: "Reproducible on staging.",
@@ -236,10 +237,10 @@ test("authenticated non-members cannot see or touch another workspace", async ()
 
 	await expect(
 		outsider.query(api.team.queries.get, { projectSlug: "client-portal" }),
-	).rejects.toThrow(/denied/i);
+	).rejects.toThrow(/Project not found/);
 	await expect(
 		outsider.query(api.feedback.queries.workspace, { projectSlug: "client-portal" }),
-	).rejects.toThrow(/denied/i);
+	).rejects.toThrow(/Project not found/);
 	// users.current exposes only the caller's own row.
 	await expect(outsider.query(api.users.queries.current, {})).resolves.toMatchObject({
 		id: outsiderId,
@@ -261,7 +262,7 @@ test("project links are enforced: academy member cannot enter client-portal", as
 	const academy = t.withIdentity({ subject: ids.academy }); // academy only
 	await expect(
 		academy.query(api.feedback.queries.workspace, { projectSlug: "client-portal" }),
-	).rejects.toThrow(/denied/i);
+	).rejects.toThrow(/Project not found/);
 	await expect(
 		academy.query(api.feedback.queries.workspace, { projectSlug: "academy" }),
 	).resolves.toBeDefined();
@@ -296,7 +297,7 @@ test("administrators create persisted projects with their own membership", async
 });
 
 test("new accounts create their first workspace as its administrator and owner", async () => {
-	const t = convexTest(schema, modules);
+	const t = newConvexTest(modules);
 	const userId = await t.run((ctx) =>
 		ctx.db.insert("users", { name: "Nia New", email: "nia@example.com" }),
 	);
@@ -396,6 +397,7 @@ test("an invitation grants only its project role and expires before acceptance",
 	const recipient = t.withIdentity({ subject: recipientId });
 
 	await expect(recipient.mutation(api.invitations.mutations.accept, { token })).resolves.toEqual({
+		ok: true,
 		projectSlug: "client-portal",
 	});
 	await expect(
@@ -406,10 +408,10 @@ test("an invitation grants only its project role and expires before acceptance",
 	).resolves.toMatchObject({ statuses: expect.arrayContaining([expect.objectContaining({ value: "New" })]) });
 	await expect(
 		recipient.query(api.feedback.queries.workspace, { projectSlug: "academy" }),
-	).rejects.toThrow(/access denied/i);
+	).rejects.toThrow(/Project not found/);
 	await expect(
 		recipient.mutation(api.invitations.mutations.accept, { token: expiredToken }),
-	).rejects.toThrow(/expired/i);
+	).resolves.toMatchObject({ ok: false, reason: "expired" });
 
 	const membership = await t.run(async (ctx) => {
 		const project = await ctx.db
@@ -442,6 +444,18 @@ test("an invitation grants only its project role and expires before acceptance",
 			criticalAlerts: false,
 			weeklyDigest: false,
 		});
+		// The link's creator administers that project (accept re-checks it).
+		await ctx.db.insert("organizationMembers", {
+			organizationId,
+			userId: ids.admin,
+			roleIds: [ids.adminRoleId],
+		});
+		await ctx.db.insert("projectMembers", {
+			projectId,
+			userId: ids.admin,
+			roleId: ids.adminRoleId,
+			joinedAt: Date.now(),
+		});
 		const token = "second-workspace-invitation";
 		await ctx.db.insert("projectInvitations", {
 			projectId,
@@ -454,7 +468,7 @@ test("an invitation grants only its project role and expires before acceptance",
 	});
 	await expect(
 		recipient.mutation(api.invitations.mutations.accept, { token: secondWorkspaceInvite }),
-	).resolves.toEqual({ projectSlug: "second-project" });
+	).resolves.toEqual({ ok: true, projectSlug: "second-project" });
 	await expect(recipient.query(api.projects.queries.list, {})).resolves.toEqual(
 		expect.arrayContaining([
 			{ slug: "client-portal", name: "Client Portal", description: "Test project." },
@@ -505,12 +519,12 @@ test("administrators manage project roles and deleted roles fall back to member"
 		memberId: ids.member,
 		roleId: customRole.id,
 	});
-	const workspace = await admin.query(api.feedback.queries.workspace, {
+	await admin.query(api.feedback.queries.workspace, {
 		projectSlug: "client-portal",
 	});
 	await member.mutation(api.feedback.mutations.update, {
 		projectSlug: "client-portal",
-		feedbackId: workspace.items[0]._id,
+		feedbackId: ids.itemId,
 		changes: { priority: "Low" },
 	});
 
@@ -527,7 +541,7 @@ test("administrators manage project roles and deleted roles fall back to member"
 	await expect(
 		member.mutation(api.feedback.mutations.update, {
 			projectSlug: "client-portal",
-			feedbackId: workspace.items[0]._id,
+			feedbackId: ids.itemId,
 			changes: { priority: "High" },
 		}),
 	).rejects.toThrow();
@@ -542,10 +556,10 @@ test("capabilities hold per role: members cannot triage or manage", async () => 
 	const admin = t.withIdentity({ subject: ids.admin });
 	const member = t.withIdentity({ subject: ids.member });
 
-	const workspace = await admin.query(api.feedback.queries.workspace, {
+	await admin.query(api.feedback.queries.workspace, {
 		projectSlug: "client-portal",
 	});
-	const itemId = workspace.items[0]._id;
+	const itemId = ids.itemId;
 
 	// Member without triage capability is refused…
 	await expect(
@@ -591,13 +605,13 @@ test("assignee spoofing is impossible: owners must belong to the project", async
 	const outsiderId: Id<"users"> = await t.run(async (ctx) =>
 		ctx.db.insert("users", { name: "Outsider", email: "outsider2@example.com" }),
 	);
-	const workspace = await admin.query(api.feedback.queries.workspace, {
+	await admin.query(api.feedback.queries.workspace, {
 		projectSlug: "client-portal",
 	});
 	await expect(
 		admin.mutation(api.feedback.mutations.update, {
 			projectSlug: "client-portal",
-			feedbackId: workspace.items[0]._id,
+			feedbackId: ids.itemId,
 			changes: { assigneeId: outsiderId },
 		}),
 	).rejects.toThrow(/belongs to this project/i);
@@ -605,13 +619,13 @@ test("assignee spoofing is impossible: owners must belong to the project", async
 	// the authenticated user.
 	await admin.mutation(api.feedback.mutations.addComment, {
 		projectSlug: "client-portal",
-		feedbackId: workspace.items[0]._id,
+		feedbackId: ids.itemId,
 		body: "admin note",
 	});
-	const detail = await admin.query(api.feedback.queries.detail, {
+	const detail = (await admin.query(api.feedback.queries.detail, {
 		projectSlug: "client-portal",
-		feedbackId: workspace.items[0]._id,
-	});
+		feedbackId: ids.itemId,
+	}))!;
 	expect(detail.comments[0].body).toBe("admin note");
 	expect(ids.member).toBeDefined();
 });
@@ -690,7 +704,7 @@ test("a user receives the union of permissions from assigned roles", async () =>
 });
 
 test("new workspace taxonomy reads do not require legacy user organizationId", async () => {
-	const t = convexTest(schema, modules);
+	const t = newConvexTest(modules);
 	const userId = await t.run((ctx) => ctx.db.insert("users", { name: "New owner" }));
 	const owner = t.withIdentity({ subject: userId });
 	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, { name: "Fresh Org", projectName: "Fresh Org" });
@@ -738,12 +752,12 @@ test("taxonomy label edits stay in their organization and foreign admins cannot 
 	});
 	expect((await admin.query(api.taxonomies.queries.list, { projectSlug: "client-portal" })).statuses[0].label).toBe("Incoming");
 	expect((await admin.query(api.taxonomies.queries.list, { projectSlug: "academy" })).statuses[0].label).toBe("Incoming");
-	await expect(admin.query(api.taxonomies.queries.list, { projectSlug })).rejects.toThrow(/denied/i);
+	await expect(admin.query(api.taxonomies.queries.list, { projectSlug })).rejects.toThrow(/Project not found/);
 	expect(await otherMember.query(api.taxonomies.queries.list, { projectSlug })).toEqual(before);
 	const docsBefore = await t.run((ctx) => ctx.db.query("taxonomies").collect());
 	await expect(admin.mutation(api.taxonomies.mutations.updateOption, {
 		projectSlug, key: "status", value: "New", label: "Hijacked",
-	})).rejects.toThrow(/denied/i);
+	})).rejects.toThrow(/Project not found/);
 	expect(await t.run((ctx) => ctx.db.query("taxonomies").collect())).toEqual(docsBefore);
 });
 
@@ -752,7 +766,7 @@ test("taxonomy creation rejects managers without changing docs", async () => {
 	const before = await t.run((ctx) => ctx.db.query("taxonomies").collect());
 	await expect(t.withIdentity({ subject: ids.manager }).mutation(api.taxonomies.mutations.createOption, {
 		projectSlug: "client-portal", key: "category", label: "Unauthorized", color: "#111111",
-	})).rejects.toThrow(/cannot make this change/i);
+	})).rejects.toThrow(/only organization administrators/i);
 	expect(await t.run((ctx) => ctx.db.query("taxonomies").collect())).toEqual(before);
 });
 
@@ -765,17 +779,17 @@ test.each([
 		const sameOrgProject = await ctx.db.query("projects").withIndex("by_slug", (q) => q.eq("slug", "academy")).unique();
 		const otherProject = await ctx.db.query("projects").withIndex("by_slug", (q) => q.eq("slug", projectSlug)).unique();
 		const item = await ctx.db.get("feedback", ids.itemId);
-		await ctx.db.patch("feedback", ids.itemId, { projectId: sameOrgProject!._id, [key]: value });
+		await patchFeedbackRow(ctx, ids.itemId, { projectId: sameOrgProject!._id, [key]: value });
 		const { _id, _creationTime, ...fields } = item!;
 		void _id; void _creationTime;
-		await ctx.db.insert("feedback", { ...fields, projectId: otherProject!._id, [key]: value });
+		await insertFeedbackRow(ctx, { ...fields, projectId: otherProject!._id, [key]: value });
 	});
 	const before = await t.run((ctx) => ctx.db.query("taxonomies").collect());
 	await expect(admin.mutation(api.taxonomies.mutations.removeOption, {
 		projectSlug: "client-portal", key, value,
 	})).rejects.toThrow(/still used/i);
 	expect(await t.run((ctx) => ctx.db.query("taxonomies").collect())).toEqual(before);
-	await t.run((ctx) => ctx.db.patch("feedback", ids.itemId, {
+	await t.run((ctx) => patchFeedbackRow(ctx, ids.itemId, {
 		[key]: key === "status" ? "New" : key === "category" ? "Bug" : "High",
 	}));
 	await admin.mutation(api.taxonomies.mutations.removeOption, { projectSlug: "client-portal", key, value });
@@ -809,7 +823,7 @@ test("an administrator assigned to another organization cannot enter this projec
 	const caller = t.withIdentity({ subject: otherAdmin });
 	await expect(
 		caller.query(api.feedback.queries.workspace, { projectSlug: "client-portal" }),
-	).rejects.toThrow(/denied/i);
+	).rejects.toThrow(/Project not found/);
 });
 
 test("administrators remove project members and their open work becomes unassigned", async () => {
@@ -817,10 +831,10 @@ test("administrators remove project members and their open work becomes unassign
 	const admin = t.withIdentity({ subject: ids.admin });
 	const member = t.withIdentity({ subject: ids.member });
 	const doneId = await t.run(async (ctx) => {
-		await ctx.db.patch("feedback", ids.itemId, { assigneeId: ids.member });
+		await patchFeedbackRow(ctx, ids.itemId, { assigneeId: ids.member });
 		const item = (await ctx.db.get("feedback", ids.itemId))!;
 		const { _id, _creationTime, ...fields } = item;
-		return ctx.db.insert("feedback", { ...fields, status: "Completed", title: "Shipped" });
+		return insertFeedbackRow(ctx, { ...fields, status: "Completed", title: "Shipped" });
 	});
 
 	await admin.mutation(api.team.mutations.removeMember, {
@@ -932,10 +946,10 @@ test("triagers log feedback manually and the activity names them", async () => {
 		senderName: "Nora North",
 		senderEmail: "Nora@Northwind.example",
 	});
-	const { item, activities } = await manager.query(api.feedback.queries.detail, {
+	const { item, activities } = (await manager.query(api.feedback.queries.detail, {
 		projectSlug: "client-portal",
 		feedbackId,
-	});
+	}))!;
 	expect(item).toMatchObject({
 		title: "Export needs CSV",
 		category: "Feature request",
@@ -1062,7 +1076,7 @@ test("legacy user fields never grant access without an organization membership",
 	const legacy = t.withIdentity({ subject: legacyId });
 	await expect(
 		legacy.query(api.feedback.queries.workspace, { projectSlug: "client-portal" }),
-	).rejects.toThrow("Feedback access denied.");
+	).rejects.toThrow("Project not found.");
 	await expect(legacy.query(api.projects.queries.list, {})).resolves.toEqual([]);
 	await expect(legacy.query(api.setup.queries.status, {})).resolves.toMatchObject({
 		hasMembership: false,
@@ -1131,7 +1145,7 @@ test("accepting an invitation repairs a missing organization membership", async 
 test("members see the team roster but never per-person workload comparisons", async () => {
 	const { t, ids } = await seedTestWorkspace();
 	await t.mutation(internal.setup.admin.seedAccessCatalog, {});
-	await t.run((ctx) => ctx.db.patch("feedback", ids.itemId, { assigneeId: ids.manager }));
+	await t.run((ctx) => patchFeedbackRow(ctx, ids.itemId, { assigneeId: ids.manager }));
 	const member = t.withIdentity({ subject: ids.member });
 	const manager = t.withIdentity({ subject: ids.manager });
 
@@ -1145,8 +1159,10 @@ test("members see the team roster but never per-person workload comparisons", as
 			openAssigned: null,
 			criticalAssigned: null,
 			lastActivityAt: null,
-			projectCount: null,
 		});
+		expect(
+			await member.query(api.team.queries.memberProjectCount, { projectSlug: "client-portal", memberId: row.id }),
+		).toBeNull();
 	}
 
 	const asManager = await manager.query(api.team.queries.get, { projectSlug: "client-portal" });

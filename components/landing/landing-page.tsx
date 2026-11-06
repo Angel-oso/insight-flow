@@ -56,7 +56,7 @@ function Closing() {
 function Footer() {
 	return (
 		<footer className="border-t border-lp-line">
-			<div className="mx-auto grid max-w-[1200px] gap-10 px-4 py-14 sm:px-8 md:grid-cols-[minmax(0,1fr)_auto_auto] md:gap-20">
+			<div className="mx-auto grid max-w-[1200px] gap-10 px-4 py-14 sm:px-8 md:grid-cols-[minmax(0,1fr)_auto_auto_auto] md:gap-20">
 				<div>
 					<Wordmark />
 					<p className="mt-3 max-w-xs text-sm leading-6 text-lp-muted">Turn feedback into clear, traceable product decisions.</p>
@@ -74,6 +74,13 @@ function Footer() {
 					<ul className="mt-3 space-y-2 text-sm text-lp-muted">
 						<li><Link href="/login" className="hover:text-lp-fg">Sign in</Link></li>
 						<li><Link href="/signup" className="hover:text-lp-fg">Create an account</Link></li>
+					</ul>
+				</nav>
+				<nav aria-label="Legal">
+					<h2 className="text-sm font-medium">Legal</h2>
+					<ul className="mt-3 space-y-2 text-sm text-lp-muted">
+						<li><Link href="/privacy" className="hover:text-lp-fg">Privacy Policy</Link></li>
+						<li><Link href="/terms" className="hover:text-lp-fg">Terms of Service</Link></li>
 					</ul>
 				</nav>
 			</div>

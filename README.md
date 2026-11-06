@@ -98,9 +98,25 @@ triage change and note writes an activity entry.
 Title, description, category, and optional name and email. Validated on the
 server; closed when the project is paused, archived, or its intake is turned
 off. New items start in the first status with the project's default priority,
-unassigned. A hidden honeypot field absorbs simple bots, and intake closes
-when a project reaches its 200-item inbox limit so the team's views keep
-working.
+unassigned. A hidden honeypot field absorbs simple bots. There is no
+per-project item cap: the inbox paginates on the server and every count comes
+from aggregates, so a project keeps working with tens of thousands of items.
+
+### Scale: pagination and aggregates
+
+- **Inbox** (`feedback/queries:list`): server-side pagination with
+  `usePaginatedQuery`. Status, priority, category, assignee (including
+  "assigned to me") and the received date range use indexes; title search uses
+  the `search_title` search index.
+- **Metrics** (project overview, team, organization overview): counts come
+  from `@convex-dev/aggregate` instances namespaced per project
+  (`convex/feedback/aggregates.ts`), keyed by raw status/priority values, so
+  editing a status's "final" flag or a priority's rank needs no data rewrite.
+- **Single write path**: every feedback insert/patch/delete goes through
+  `convex/feedback/store.ts`, which updates the row and every aggregate in the
+  same transaction. After deploying to an environment with existing data, run
+  the idempotent backfill once:
+  `npx convex run --prod feedback/store:backfillAggregates '{}'`.
 
 ### Organization taxonomies
 
@@ -201,6 +217,25 @@ roles ── permissions   (built-in admin/manager/member + per-project custom r
   open backlog) · `Healthy` (nothing open).
 - **Archived projects** are read-only, including team, roles, and
   invitations, until an administrator restores them.
+- **Deletion** is self-serve and irreversible (see *Data deletion* below).
+
+### Data deletion
+
+| What | Who | Notes |
+| --- | --- | --- |
+| Feedback item(s) | `project.manage` (project admins) | One item from its detail panel, or up to 50 selected items (spam). Removes comments and activity too. Not on archived projects. |
+| Invitation link | `team.manage` | Revoke pending links from the team page. Expired links are purged daily 30 days after expiry. |
+| Organization member | Organization admins | Removes them from every project in the organization; open work returns to Unassigned. The owner cannot be removed; one admin always stays. Non-owners can also leave. |
+| Project | Organization admins | Typed-name confirmation. Hidden everywhere at once (including the public form), then purged in background batches. |
+| Organization | Owner | Typed-name confirmation. Cascades through every project, memberships and taxonomies. |
+| Own account | Anyone signed in | Typed email confirmation. Refused while you own an organization. Removes memberships, created invitation links, sign-in data and sessions; notes stay as "Former member". |
+
+Large deletions mark the record first (`deletionRequestedAt`, so every
+lookup ignores it immediately) and then run bounded internal mutations that
+reschedule themselves until done (`convex/projects/deletion.ts`,
+`convex/organizations/deletion.ts`, `convex/users/deletion.ts`). Feedback
+rows are always deleted through `convex/feedback/store.ts`, so the
+aggregates drop with them.
 
 ---
 
@@ -208,8 +243,8 @@ roles ── permissions   (built-in admin/manager/member + per-project custom r
 
 | Role | Can |
 | --- | --- |
-| Owner | An admin who can also transfer organization ownership |
-| Admin | Everything: triage, assign, log, manage project, team, roles, taxonomies, organization |
+| Owner | An admin who can also transfer organization ownership and delete the organization |
+| Admin | Everything: triage, assign, log, delete feedback, manage project, team, roles, taxonomies, organization members; delete projects |
 | Manager | Triage, assign, update, comment, and log feedback |
 | Member | Comment and update the status of feedback assigned to them; see the team roster without per-person workload |
 | Custom | Any combination, defined per project in settings |
@@ -255,17 +290,28 @@ see it arrive in the inbox and the overview.
 | `pnpm build` / `pnpm start` | Production build and server |
 | `pnpm lint` | ESLint |
 | `pnpm test` | Backend authorization and intake suites (Vitest + convex-test) |
-| `npx tsc --noEmit` | Typecheck |
+| `pnpm typecheck` | Typecheck the app and the Convex backend |
 | `npx convex dev` | Backend watch + codegen |
+
+---
+
+## Deploying
+
+Production runs the Next.js app on Vercel (build command
+`npx convex deploy --cmd 'pnpm build'`) against a Convex production
+deployment. See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for the full runbook:
+environment variables, OAuth and email setup, post-deploy data steps,
+backups, monitoring, the security checklist, and rollback. CI
+(`.github/workflows/ci.yml`) runs lint, typechecks, tests, and a build on every
+push and pull request.
 
 ---
 
 ## Deliberately out of scope
 
 Integrations (Slack, Jira, email), AI summaries or deduplication, public
-voting or roadmaps, billing, CSV import/export, bulk operations, and
-notifications. Inbox filtering runs client-side over a 200-item cap per
-project; moving it server-side is the natural next step as volume grows.
+voting or roadmaps, billing, CSV import/export, and bulk edits (bulk
+delete exists, for spam cleanup).
 
 ---
 

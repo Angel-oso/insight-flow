@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
+import { logAudit } from "../audit/log";
 import { mutation, query } from "../_generated/server";
-import { requireCapability, requireProject } from "../feedback/access";
+import { PROJECT_MEMBER_LIMIT, requireCapability, requireProject, requireUserId } from "../feedback/access";
 import { getTaxonomies } from "../taxonomies/lib";
 import schema from "../schema";
 
@@ -12,6 +13,9 @@ const settingsChanges = v.object({
 	defaultPriority: v.optional(
 		schema.tables.projects.validator.fields.defaultPriority,
 	),
+	// Email notifications to members who can triage (convex/notifications).
+	criticalAlerts: v.optional(v.boolean()),
+	weeklyDigest: v.optional(v.boolean()),
 });
 
 const roleSummary = v.object({
@@ -22,6 +26,15 @@ const roleSummary = v.object({
 });
 
 const baseRoleNames = ["admin", "manager", "member"] as const;
+/** Custom roles one project can define. */
+export const MAX_CUSTOM_ROLES = 30;
+/**
+ * Custom roles read by the roles list. Above the creation cap so projects
+ * that predate it still load (no throw); only the first ones are listed.
+ */
+const CUSTOM_ROLE_READ_LIMIT = 60;
+/** Pending invitation links reassigned when a role is deleted. */
+const PENDING_LINK_LIMIT = 1000;
 const requiredMemberPermissions = ["feedback.view", "project.view", "team.view"] as const;
 
 async function roleSummaryFor(
@@ -66,6 +79,8 @@ export const update = mutation({
 			status?: "Active" | "Paused" | "Archived";
 			inboxEnabled?: boolean;
 			defaultPriority?: string;
+			criticalAlerts?: boolean;
+			weeklyDigest?: boolean;
 			updatedAt: number;
 		} = { updatedAt: Date.now() };
 		let changed = false;
@@ -112,6 +127,12 @@ export const update = mutation({
 			}
 			patch.defaultPriority = changes.defaultPriority;
 			changed = true;
+		}
+		for (const field of ["criticalAlerts", "weeklyDigest"] as const) {
+			if (changes[field] !== undefined && changes[field] !== project[field]) {
+				patch[field] = changes[field];
+				changed = true;
+			}
 		}
 
 		if (!changed) return null;
@@ -161,11 +182,15 @@ export const access = query({
 /** Project roles are visible only to administrators because they expose grants. */
 export const roles = query({
 	args: { projectSlug: v.string() },
-	returns: v.object({ canManageRoles: v.boolean(), roles: v.array(roleSummary) }),
+	returns: v.object({
+		canManageRoles: v.boolean(),
+		roles: v.array(roleSummary),
+		customRoleLimit: v.number(),
+	}),
 	handler: async (ctx, { projectSlug }) => {
 		const { project, access } = await requireProject(ctx, projectSlug);
 		if (!access.permissions.includes("organization.manage")) {
-			return { canManageRoles: false, roles: [] };
+			return { canManageRoles: false, roles: [], customRoleLimit: MAX_CUSTOM_ROLES };
 		}
 		const baseRoles = await Promise.all(
 			baseRoleNames.map((name) =>
@@ -178,11 +203,11 @@ export const roles = query({
 		const customRoles = await ctx.db
 			.query("roles")
 			.withIndex("by_projectId", (q) => q.eq("projectId", project._id))
-			.take(51);
-		if (customRoles.length > 50) throw new ConvexError("This project supports up to 50 custom roles.");
+			.take(CUSTOM_ROLE_READ_LIMIT);
 		return {
 			canManageRoles: true,
 			roles: await Promise.all([...baseRoles, ...customRoles].map((role) => roleSummaryFor(ctx, role!))),
+			customRoleLimit: MAX_CUSTOM_ROLES,
 		};
 	},
 });
@@ -211,6 +236,14 @@ export const createRole = mutation({
 			.withIndex("by_projectId_name", (q) => q.eq("projectId", project._id).eq("name", name))
 			.unique();
 		if (existing) throw new ConvexError("A role with this name already exists in this project.");
+		const customRoles = await ctx.db
+			.query("roles")
+			.withIndex("by_projectId", (q) => q.eq("projectId", project._id))
+			.take(MAX_CUSTOM_ROLES);
+		if (customRoles.length >= MAX_CUSTOM_ROLES)
+			throw new ConvexError(
+				`A project can have up to ${MAX_CUSTOM_ROLES} custom roles. Delete one you no longer use first.`,
+			);
 		const selected = new Set([...requiredMemberPermissions, ...permissionKeys]);
 		selected.delete("organization.manage");
 		const permissionIds = await Promise.all([...selected].map(async (key) => {
@@ -222,6 +255,13 @@ export const createRole = mutation({
 			return permission._id;
 		}));
 		const roleId = await ctx.db.insert("roles", { name, permissionIds, projectId: project._id });
+		await logAudit(ctx, {
+			organizationId: project.organizationId,
+			projectId: project._id,
+			actorId: await requireUserId(ctx),
+			action: "project.role_created",
+			summary: `Created the role "${name}" in ${project.name}`,
+		});
 		return roleSummaryFor(ctx, { _id: roleId, name, permissionIds, projectId: project._id });
 	},
 });
@@ -242,22 +282,38 @@ export const deleteRole = mutation({
 			throw new ConvexError("Built-in roles cannot be deleted.");
 		}
 		if (!memberRole) throw new ConvexError("Workspace roles are not initialized.");
-		const [members, invitations] = await Promise.all([
-			ctx.db.query("projectMembers").withIndex("by_projectId_userId", (q) => q.eq("projectId", project._id)).take(51),
-			ctx.db.query("projectInvitations").withIndex("by_projectId", (q) => q.eq("projectId", project._id)).take(101),
-		]);
-		if (members.length > 50 || invitations.length > 100) {
-			throw new ConvexError("Delete this role after reducing this project's members or invitations.");
-		}
+		const members = await ctx.db
+			.query("projectMembers")
+			.withIndex("by_projectId_userId", (q) => q.eq("projectId", project._id))
+			.take(PROJECT_MEMBER_LIMIT + 1);
+		if (members.length > PROJECT_MEMBER_LIMIT)
+			throw new ConvexError(`This project supports up to ${PROJECT_MEMBER_LIMIT} project members.`);
 		for (const member of members) {
 			if (member.roleId === role._id) await ctx.db.patch("projectMembers", member._id, { roleId: memberRole._id });
 		}
-		for (const invitation of invitations) {
-			if (invitation.roleId === role._id && !invitation.acceptedAt) {
+		// Only links that can still be accepted matter: pending (no
+		// acceptedAt) and unexpired. Used or expired links are history the
+		// daily cleanup removes; accepting one fails without its role.
+		const now = Date.now();
+		let pending = 0;
+		for await (const invitation of ctx.db
+			.query("projectInvitations")
+			.withIndex("by_projectId_acceptedAt_expiresAt", (q) =>
+				q.eq("projectId", project._id).eq("acceptedAt", undefined).gt("expiresAt", now),
+			)) {
+			if (++pending > PENDING_LINK_LIMIT)
+				throw new ConvexError("This project has too many open invitation links. Revoke some, then delete the role.");
+			if (invitation.roleId === role._id)
 				await ctx.db.patch("projectInvitations", invitation._id, { roleId: memberRole._id });
-			}
 		}
 		await ctx.db.delete("roles", role._id);
+		await logAudit(ctx, {
+			organizationId: project.organizationId,
+			projectId: project._id,
+			actorId: await requireUserId(ctx),
+			action: "project.role_deleted",
+			summary: `Deleted the role "${role.name}" in ${project.name}; its members became members`,
+		});
 		return null;
 	},
 });

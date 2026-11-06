@@ -1,8 +1,11 @@
+import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { resolveOrganizationAccess, resolveProjectAccess } from "../access/roles";
+import type { Id } from "../_generated/dataModel";
 import { query } from "../_generated/server";
-import { listProjectFeedback, requireProject, requireUserId } from "../feedback/access";
-import { getFinalStatuses, getPriorityRanks } from "../taxonomies/lib";
+import { requireProject, requireUserId } from "../feedback/access";
+import { projectBacklog, windowCounts } from "../feedback/aggregates";
+import { getFinalStatuses, getPriorityRanks, getTaxonomies } from "../taxonomies/lib";
 import { projectHealth } from "../dashboard/health";
 import { requireOrganization } from "./access";
 import schema from "../schema";
@@ -27,13 +30,9 @@ const organizationActivity = v.object({
 	type: schema.tables.activities.validator.fields.type,
 });
 
+// Matches MAX_PROJECTS_PER_ORGANIZATION in convex/projects/mutations.ts.
 export const ORGANIZATION_PROJECT_LIMIT = 50;
 const dayMs = 86_400_000;
-
-
-function inRange(at: number | undefined, start: number, end: number) {
-	return at !== undefined && at >= start && at < end;
-}
 
 export const mine = query({
 	args: {},
@@ -86,16 +85,19 @@ export const overview = query({
 		if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to || to - from > 365 * dayMs) {
 			throw new ConvexError("Choose a valid date window of at most 365 days.");
 		}
+		// Projects being deleted disappear from the overview at once (and do
+		// not use up the read bound).
 		const projects = await ctx.db.query("projects")
-			.withIndex("by_organizationId", (q) => q.eq("organizationId", organizationId))
+			.withIndex("by_organizationId_deletionRequestedAt", (q) =>
+				q.eq("organizationId", organizationId).eq("deletionRequestedAt", undefined))
 			.take(ORGANIZATION_PROJECT_LIMIT + 1);
 		if (projects.length > ORGANIZATION_PROJECT_LIMIT) {
 			throw new ConvexError("This overview supports up to 50 projects per organization.");
 		}
-		const [finals, ranks] = await Promise.all([
-			getFinalStatuses(ctx, organizationId), getPriorityRanks(ctx, organizationId),
+		const [taxonomies, finals, ranks] = await Promise.all([
+			getTaxonomies(ctx, organizationId), getFinalStatuses(ctx, organizationId), getPriorityRanks(ctx, organizationId),
 		]);
-		const topRank = Math.max(...ranks.values());
+		const topRank = Math.max(0, ...ranks.values());
 		const previousStart = from - (to - from);
 		const rows = await Promise.all(projects.map(async (project) => {
 			const access = await resolveProjectAccess(ctx, userId, project._id);
@@ -104,21 +106,27 @@ export const overview = query({
 			);
 			// Non-admins do not even read unrelated project feedback or activity.
 			if (!isAdmin && !canOpen) return null;
-			const items = await listProjectFeedback(ctx, project._id);
-			const openItems = items.filter((item) => !finals.has(item.status));
-			const open = openItems.length;
-			const critical = openItems.filter((item) => ranks.get(item.priority) === topRank).length;
-			const received = items.filter((item) => inRange(item.receivedAt, from, to)).length;
+			// Aggregate counts (O(log n)); no feedback rows are scanned.
+			const backlog = await projectBacklog(ctx, project._id, taxonomies, finals);
+			const windows = await windowCounts(ctx, project._id, [
+				{ start: from, end: to }, { start: previousStart, end: from },
+			]);
+			const open = backlog.open;
+			const critical = backlog.openAtRank(topRank);
+			const received = windows.received[0];
 			// Same rule as the project overview: any final status resolves an
 			// item. Taxonomies are editable, so no status literal is assumed.
-			const completedItems = items.filter((item) => finals.has(item.status));
-			const completed = completedItems.length;
+			const completed = backlog.completed;
+			const total = backlog.total;
 			const activities = isAdmin ? await ctx.db.query("activities")
 				.withIndex("by_projectId_createdAt", (q) => q.eq("projectId", project._id))
 				.order("desc").take(15) : [];
+			const [latestUpdate] = await ctx.db.query("feedback")
+				.withIndex("by_projectId_updatedAt", (q) => q.eq("projectId", project._id))
+				.order("desc").take(1);
 			const latestActivityAt = Math.max(
 				project._creationTime,
-				...items.map((item) => item.updatedAt),
+				latestUpdate?.updatedAt ?? 0,
 				...activities.map((activity) => activity.createdAt),
 			);
 			return {
@@ -129,16 +137,16 @@ export const overview = query({
 				},
 				health: {
 					slug: project.slug, name: project.name, received, open, critical, completed,
-					total: items.length, resolutionRate: items.length ? completed / items.length : 0,
-					latestActivityAt, health: projectHealth(items, finals, ranks).status,
+					total, resolutionRate: total ? completed / total : 0,
+					latestActivityAt, health: projectHealth({ open, critical }).status,
 				},
 				metrics: {
 					received,
-					receivedPrevious: items.filter((item) => inRange(item.receivedAt, previousStart, from)).length,
+					receivedPrevious: windows.received[1],
 					open, critical,
-					completedInRange: completedItems.filter((item) => inRange(item.completedAt, from, to)).length,
-					completedPrevious: completedItems.filter((item) => inRange(item.completedAt, previousStart, from)).length,
-					total: items.length,
+					completedInRange: windows.completed[0],
+					completedPrevious: windows.completed[1],
+					total,
 				},
 				activities: activities.map((activity) => ({
 					...activity, projectName: project.name, projectSlug: project.slug,
@@ -220,5 +228,45 @@ export const settings = query({
 			eligibleAdmins: eligible.filter((row) => row !== null)
 				.sort((a, b) => a.name.localeCompare(b.name)),
 		};
+	},
+});
+
+const auditEntry = v.object({
+	id: v.id("auditLogs"),
+	at: v.number(),
+	action: v.string(),
+	summary: v.string(),
+	// Display names only; emails never leave this query.
+	actorName: v.union(v.string(), v.null()),
+	targetName: v.union(v.string(), v.null()),
+	projectName: v.union(v.string(), v.null()),
+});
+
+/** Newest-first organization audit log, for organization administrators. */
+export const auditLog = query({
+	args: { organizationId: v.id("organizations"), paginationOpts: paginationOptsValidator },
+	returns: paginationResultValidator(auditEntry),
+	handler: async (ctx, { organizationId, paginationOpts }) => {
+		await requireOrganization(ctx, organizationId, true);
+		if (paginationOpts.numItems > 100) throw new ConvexError("Load at most 100 audit entries at a time.");
+		const result = await ctx.db
+			.query("auditLogs")
+			.withIndex("by_organizationId_at", (q) => q.eq("organizationId", organizationId))
+			.order("desc")
+			.paginate(paginationOpts);
+		const name = async (userId: Id<"users"> | undefined) =>
+			userId ? ((await ctx.db.get("users", userId))?.name ?? "Former member") : null;
+		const page = await Promise.all(result.page.map(async (entry) => ({
+			id: entry._id,
+			at: entry.at,
+			action: entry.action,
+			summary: entry.summary,
+			actorName: entry.actorId ? await name(entry.actorId) : null,
+			targetName: await name(entry.targetUserId),
+			projectName: entry.projectId
+				? ((await ctx.db.get("projects", entry.projectId))?.name ?? "Deleted project")
+				: null,
+		})));
+		return { ...result, page };
 	},
 });

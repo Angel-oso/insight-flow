@@ -40,7 +40,10 @@ import { Textarea } from "@/components/ui/textarea";
 import type { Doc } from "@/convex/_generated/dataModel";
 import type { Project } from "@/lib/projects";
 import { useTaxonomies, type TaxonomyItem } from "@/lib/taxonomy";
+import { NotificationPreferences } from "@/components/notifications/notification-preferences";
 import { TaxonomyManager } from "./taxonomy-manager";
+import { ProjectIntegrations } from "./integrations";
+import { DataTools } from "./data-tools";
 import { PublicLink } from "./public-link";
 import {
 	useProjectSettingsData,
@@ -56,6 +59,8 @@ type SettingsState = {
 	readonly status: ProjectStatus;
 	readonly inboxEnabled: boolean;
 	readonly defaultPriority: Priority;
+	readonly criticalAlerts: boolean;
+	readonly weeklyDigest: boolean;
 };
 
 function fromProject(project: Doc<"projects">): SettingsState {
@@ -65,6 +70,8 @@ function fromProject(project: Doc<"projects">): SettingsState {
 		status: project.status,
 		inboxEnabled: project.inboxEnabled,
 		defaultPriority: project.defaultPriority,
+		criticalAlerts: project.criticalAlerts,
+		weeklyDigest: project.weeklyDigest,
 	};
 }
 
@@ -191,6 +198,8 @@ export function ProjectSettingsWorkspace({
 				status: settings.status,
 				inboxEnabled: settings.inboxEnabled,
 				defaultPriority: settings.defaultPriority,
+				criticalAlerts: settings.criticalAlerts,
+				weeklyDigest: settings.weeklyDigest,
 			})
 		) {
 			setHasSaved(true);
@@ -216,153 +225,204 @@ export function ProjectSettingsWorkspace({
 		}
 	};
 
+	// Only the cards saved by "Save project settings" live in the form; the
+	// self-contained cards below it have their own inputs (url, email) and
+	// actions, so their browser validation must not block this save.
 	return (
-		<form
-			onSubmit={(event) => {
-				event.preventDefault();
-				void handleSave();
-			}}
-			className="mt-7 space-y-6"
-		>
-			{isArchived ? (
-				<section className="flex flex-col gap-3 rounded-xl bg-dashboard-warning-soft p-5 text-dashboard-warning-foreground ring-1 ring-dashboard-warning/25 sm:flex-row sm:items-center sm:justify-between">
-					<div>
-						<p className="font-semibold">This project is archived.</p>
-						<p className="mt-1 text-sm leading-6">
-							Feedback intake and configuration changes are paused. Restore it
-							to make it active again.
-						</p>
-					</div>
-					{canManage ? (
-						<Button
-							type="button"
-							variant="outline"
-							className="bg-background"
-							disabled={pending}
-							onClick={() => void handleRestore()}
-						>
-							<ArchiveRestore data-icon="inline-start" />
-							{pending ? "Restoring…" : "Restore project"}
-						</Button>
-					) : (
-						<span className="inline-flex w-fit items-center gap-1.5 rounded-md border border-current/20 px-2 py-1 text-xs font-semibold">
-							<Archive className="size-3.5" /> Archived
-						</span>
-					)}
-				</section>
-			) : null}
-			{error ? (
-				<p role="alert" className="text-sm text-destructive">
-					{error}
-				</p>
-			) : null}
-
-			<Card className="gap-0 py-0 shadow-none">
-				<CardHeader className="border-b px-5 py-5 sm:px-6">
-					<CardTitle>General</CardTitle>
-					<CardDescription>
-						The project identity shown to its team and feedback contributors.
-					</CardDescription>
-				</CardHeader>
-				<CardContent className="space-y-5 px-5 py-5 sm:px-6">
-					<label
-						htmlFor="settings-project-name"
-						className="grid gap-2 text-sm font-medium"
-					>
-						Project name
-						<Input
-							id="settings-project-name"
-							value={settings.name}
-							maxLength={80}
-							onChange={(event) =>
-								updateSettings({ name: event.target.value })
-							}
-							disabled={!canEdit}
-						/>
-					</label>
-					<label
-						htmlFor="settings-project-description"
-						className="grid gap-2 text-sm font-medium"
-					>
-						Description
-						<Textarea
-							id="settings-project-description"
-							value={settings.description}
-							maxLength={500}
-							onChange={(event) =>
-								updateSettings({ description: event.target.value })
-							}
-							disabled={!canEdit}
-						/>
-					</label>
-					<div className="grid gap-2 text-sm font-medium">
-						<span>Project status</span>
-						<div className="flex flex-wrap gap-2">
-							{(["Active", "Paused"] as const).map((status) => (
-								<Button
-									key={status}
-									type="button"
-									variant={
-										settings.status === status ? "secondary" : "outline"
-									}
-									aria-pressed={settings.status === status}
-									onClick={() => updateSettings({ status })}
-									disabled={!canEdit}
-								>
-									{status === "Paused" ? (
-										<PauseCircle data-icon="inline-start" />
-									) : null}
-									{status}
-								</Button>
-							))}
-						</div>
-						<p className="text-sm font-normal leading-6 text-muted-foreground">
-							Paused projects retain their history but stop accepting new
-							feedback.
-						</p>
-					</div>
-				</CardContent>
-			</Card>
-
-			<Card className="gap-0 py-0 shadow-none">
-				<CardHeader className="border-b px-5 py-5 sm:px-6">
-					<CardTitle>Feedback intake</CardTitle>
-					<CardDescription>
-						Set the default conditions for feedback that enters this project.
-					</CardDescription>
-				</CardHeader>
-				<CardContent className="divide-y px-5 py-5 sm:px-6">
-					<PublicLink
-						slug={data.project.slug}
-						accepting={data.project.status === "Active" && data.project.inboxEnabled}
-					/>
-					<SettingToggle
-						label="Accept feedback"
-						description="Keep the project inbox available to receive new feedback. Pausing it preserves existing history."
-						checked={settings.inboxEnabled}
-						onPressedChange={(inboxEnabled) => updateSettings({ inboxEnabled })}
-						disabled={!canEdit}
-					/>
-					<div className="flex flex-col gap-3 py-4 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+		<div className="mt-7 space-y-6">
+			<form
+				onSubmit={(event) => {
+					event.preventDefault();
+					void handleSave();
+				}}
+				className="space-y-6"
+			>
+				{isArchived ? (
+					<section className="flex flex-col gap-3 rounded-xl bg-dashboard-warning-soft p-5 text-dashboard-warning-foreground ring-1 ring-dashboard-warning/25 sm:flex-row sm:items-center sm:justify-between">
 						<div>
-							<p className="text-sm font-medium">Default priority</p>
-							<p className="mt-1 text-sm leading-6 text-muted-foreground">
-								New feedback starts here unless its source includes a priority.
+							<p className="font-semibold">This project is archived.</p>
+							<p className="mt-1 text-sm leading-6">
+								Feedback intake and configuration changes are paused. Restore it
+								to make it active again.
 							</p>
 						</div>
-						<PriorityMenu
-							priority={settings.defaultPriority}
-							priorities={priorityOptions}
-							onPriorityChange={(defaultPriority) =>
-								updateSettings({ defaultPriority })
-							}
+						{canManage ? (
+							<Button
+								type="button"
+								variant="outline"
+								className="bg-background"
+								disabled={pending}
+								onClick={() => void handleRestore()}
+							>
+								<ArchiveRestore data-icon="inline-start" />
+								{pending ? "Restoring…" : "Restore project"}
+							</Button>
+						) : (
+							<span className="inline-flex w-fit items-center gap-1.5 rounded-md border border-current/20 px-2 py-1 text-xs font-semibold">
+								<Archive className="size-3.5" /> Archived
+							</span>
+						)}
+					</section>
+				) : null}
+				{error ? (
+					<p role="alert" className="text-sm text-destructive">
+						{error}
+					</p>
+				) : null}
+
+				<Card className="gap-0 py-0 shadow-none">
+					<CardHeader className="border-b px-5 py-5 sm:px-6">
+						<CardTitle>General</CardTitle>
+						<CardDescription>
+							The project identity shown to its team and feedback contributors.
+						</CardDescription>
+					</CardHeader>
+					<CardContent className="space-y-5 px-5 py-5 sm:px-6">
+						<label
+							htmlFor="settings-project-name"
+							className="grid gap-2 text-sm font-medium"
+						>
+							Project name
+							<Input
+								id="settings-project-name"
+								value={settings.name}
+								maxLength={80}
+								onChange={(event) =>
+									updateSettings({ name: event.target.value })
+								}
+								disabled={!canEdit}
+							/>
+						</label>
+						<label
+							htmlFor="settings-project-description"
+							className="grid gap-2 text-sm font-medium"
+						>
+							Description
+							<Textarea
+								id="settings-project-description"
+								value={settings.description}
+								maxLength={500}
+								onChange={(event) =>
+									updateSettings({ description: event.target.value })
+								}
+								disabled={!canEdit}
+							/>
+						</label>
+						<div className="grid gap-2 text-sm font-medium">
+							<span>Project status</span>
+							<div className="flex flex-wrap gap-2">
+								{(["Active", "Paused"] as const).map((status) => (
+									<Button
+										key={status}
+										type="button"
+										variant={
+											settings.status === status ? "secondary" : "outline"
+										}
+										aria-pressed={settings.status === status}
+										onClick={() => updateSettings({ status })}
+										disabled={!canEdit}
+									>
+										{status === "Paused" ? (
+											<PauseCircle data-icon="inline-start" />
+										) : null}
+										{status}
+									</Button>
+								))}
+							</div>
+							<p className="text-sm font-normal leading-6 text-muted-foreground">
+								Paused projects retain their history but stop accepting new
+								feedback.
+							</p>
+						</div>
+					</CardContent>
+				</Card>
+
+				<Card className="gap-0 py-0 shadow-none">
+					<CardHeader className="border-b px-5 py-5 sm:px-6">
+						<CardTitle>Feedback intake</CardTitle>
+						<CardDescription>
+							Set the default conditions for feedback that enters this project.
+						</CardDescription>
+					</CardHeader>
+					<CardContent className="divide-y px-5 py-5 sm:px-6">
+						<PublicLink
+							slug={data.project.slug}
+							accepting={data.project.status === "Active" && data.project.inboxEnabled}
+						/>
+						<SettingToggle
+							label="Accept feedback"
+							description="Keep the project inbox available to receive new feedback. Pausing it preserves existing history."
+							checked={settings.inboxEnabled}
+							onPressedChange={(inboxEnabled) => updateSettings({ inboxEnabled })}
 							disabled={!canEdit}
 						/>
-					</div>
-				</CardContent>
-			</Card>
+						<div className="flex flex-col gap-3 py-4 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+							<div>
+								<p className="text-sm font-medium">Default priority</p>
+								<p className="mt-1 text-sm leading-6 text-muted-foreground">
+									New feedback starts here unless its source includes a priority.
+								</p>
+							</div>
+							<PriorityMenu
+								priority={settings.defaultPriority}
+								priorities={priorityOptions}
+								onPriorityChange={(defaultPriority) =>
+									updateSettings({ defaultPriority })
+								}
+								disabled={!canEdit}
+							/>
+						</div>
+					</CardContent>
+				</Card>
+
+				<Card className="gap-0 py-0 shadow-none">
+					<CardHeader className="border-b px-5 py-5 sm:px-6">
+						<CardTitle>Notifications</CardTitle>
+						<CardDescription>
+							Email members who can triage feedback in this project. Members
+							need a verified email address to receive them.
+						</CardDescription>
+					</CardHeader>
+					<CardContent className="divide-y px-5 py-5 sm:px-6">
+						<SettingToggle
+							label="Critical alerts"
+							description={`Email triagers as soon as feedback arrives at, or is raised to, the top priority (${
+								[...(taxonomies?.priorities ?? [])].sort((a, b) => b.rank - a.rank)[0]?.label ?? "Critical"
+							}).`}
+							checked={settings.criticalAlerts}
+							onPressedChange={(criticalAlerts) => updateSettings({ criticalAlerts })}
+							disabled={!canEdit}
+						/>
+						<SettingToggle
+							label="Weekly digest"
+							description="Every Monday, email triagers a summary of the last 7 days: received, resolved, open and critical feedback, plus the items that need attention."
+							checked={settings.weeklyDigest}
+							onPressedChange={(weeklyDigest) => updateSettings({ weeklyDigest })}
+							disabled={!canEdit}
+						/>
+					</CardContent>
+				</Card>
+
+				<div className="flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between">
+					<p className="text-sm text-muted-foreground">
+						{hasSaved
+							? "Saved · Changes are live."
+							: "Changes apply after you save them."}
+					</p>
+					<Button type="submit" size="lg" disabled={!canEdit}>
+						<Inbox data-icon="inline-start" />
+						{pending ? "Saving…" : "Save project settings"}
+					</Button>
+				</div>
+			</form>
+
+			<NotificationPreferences projectSlug={project.slug} />
 
 			<TaxonomyManager projectSlug={project.slug} disabled={!canManageTaxonomies || isArchived || pending} />
+
+			<ProjectIntegrations projectSlug={project.slug} />
+
+			{canManage ? <DataTools projectSlug={project.slug} disabled={pending} /> : null}
 
 			<Card className="gap-0 py-0 shadow-none ring-destructive/20">
 				<CardHeader className="border-b px-5 py-5 sm:px-6">
@@ -387,18 +447,6 @@ export function ProjectSettingsWorkspace({
 					</Button>
 				</CardFooter>
 			</Card>
-
-			<div className="flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between">
-				<p className="text-sm text-muted-foreground">
-					{hasSaved
-						? "Saved · Changes are live."
-						: "Changes apply after you save them."}
-				</p>
-				<Button type="submit" size="lg" disabled={!canEdit}>
-					<Inbox data-icon="inline-start" />
-					{pending ? "Saving…" : "Save project settings"}
-				</Button>
-			</div>
 
 			<Sheet open={isArchiveOpen} onOpenChange={setIsArchiveOpen}>
 				<SheetContent side="right" className="w-full sm:max-w-md">
@@ -432,6 +480,6 @@ export function ProjectSettingsWorkspace({
 					</SheetFooter>
 				</SheetContent>
 			</Sheet>
-		</form>
+		</div>
 	);
 }

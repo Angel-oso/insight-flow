@@ -1,7 +1,7 @@
 "use client";
 
 import { Search, UserMinus, X } from "lucide-react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useMemo, useState } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -14,6 +14,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { userFacingError } from "@/lib/errors";
 import { api } from "@/convex/_generated/api";
 import type { FunctionReturnType } from "convex/server";
 import type { MemberRole, TeamMember } from "./model";
@@ -45,6 +46,25 @@ function RoleBadge({ role }: { readonly role: MemberRole }) {
 	);
 }
 
+/** Per-row project scope, loaded on its own so the roster stays cheap. */
+function ProjectScope({
+	projectSlug,
+	memberId,
+}: {
+	readonly projectSlug: string;
+	readonly memberId: TeamMember["id"];
+}) {
+	const scope = useQuery(api.team.queries.memberProjectCount, { projectSlug, memberId });
+	if (scope === undefined) return <span aria-busy="true">…</span>;
+	if (scope === null) return <span>—</span>;
+	return (
+		<>
+			{scope.count}
+			{scope.capped ? "+" : ""} {scope.count === 1 && !scope.capped ? "project" : "projects"}
+		</>
+	);
+}
+
 function RemoveMember({
 	member,
 	projectSlug,
@@ -64,7 +84,7 @@ function RemoveMember({
 		try {
 			await removeMember({ projectSlug, memberId: member.id });
 		} catch (cause) {
-			onError(cause instanceof Error ? cause.message : "Could not remove this member.");
+			onError(userFacingError(cause, "Could not remove this member."));
 			setConfirming(false);
 		} finally {
 			setPending(false);
@@ -149,7 +169,9 @@ function MemberIdentity({
 			</Avatar>
 			<div className="min-w-0">
 				<p className="truncate font-medium">{member.name}</p>
-				<p className="truncate text-xs text-muted-foreground">{member.email}</p>
+				{member.email ? (
+					<p className="truncate text-xs text-muted-foreground">{member.email}</p>
+				) : null}
 			</div>
 		</div>
 	);
@@ -183,10 +205,11 @@ export function MemberRoster({
 		[members],
 	);
 
+	const showsEmail = members.some((member) => member.email !== null);
 	const visibleMembers = useMemo(
 		() =>
 			members.filter((member) => {
-				const matchesQuery = `${member.name} ${member.email}`
+				const matchesQuery = `${member.name} ${member.email ?? ""}`
 					.toLowerCase()
 					.includes(query.trim().toLowerCase());
 				const matchesRole = role === "All" || member.role === role;
@@ -208,7 +231,7 @@ export function MemberRoster({
 		try {
 			await setMemberRole({ projectSlug, memberId: member.id, roleId });
 		} catch (cause) {
-			setRoleError(cause instanceof Error ? cause.message : "Could not change this member's role.");
+			setRoleError(userFacingError(cause, "Could not change this member's role."));
 		} finally {
 			setChangingMemberId(null);
 		}
@@ -241,7 +264,7 @@ export function MemberRoster({
 							className="pl-8"
 							value={query}
 							onChange={(event) => setQuery(event.target.value)}
-							placeholder="Search by name or email"
+							placeholder={showsEmail ? "Search by name or email" : "Search by name"}
 						/>
 					</div>
 					<fieldset className="flex flex-wrap items-center gap-1.5">
@@ -289,7 +312,7 @@ export function MemberRoster({
 							<tbody className="divide-y">
 								{visibleMembers.map((member, index) => (
 									<tr
-										key={member.email}
+										key={member.id}
 										className="transition-colors hover:bg-muted/40"
 									>
 										<td className="px-5 py-4">
@@ -303,8 +326,7 @@ export function MemberRoster({
 										{showsWorkload ? (
 											<>
 												<td className="px-5 py-4 text-muted-foreground">
-													{member.projectCount}{" "}
-													{member.projectCount === 1 ? "project" : "projects"}
+													<ProjectScope projectSlug={projectSlug} memberId={member.id} />
 												</td>
 												<td className="px-5 py-4 text-right tabular-nums">
 													<p className="font-medium">{member.openAssigned}</p>
@@ -341,7 +363,7 @@ export function MemberRoster({
 
 					<div className="divide-y md:hidden">
 						{visibleMembers.map((member, index) => (
-							<article key={member.email} className="space-y-4 p-5">
+							<article key={member.id} className="space-y-4 p-5">
 								<div className="flex items-start justify-between gap-4">
 									<MemberIdentity member={member} index={index} />
 									{canManageRoles ? (
@@ -353,8 +375,7 @@ export function MemberRoster({
 									<div>
 										<p className="text-xs text-muted-foreground">Scope</p>
 										<p className="mt-1 leading-5">
-											{member.projectCount}{" "}
-											{member.projectCount === 1 ? "project" : "projects"}
+											<ProjectScope projectSlug={projectSlug} memberId={member.id} />
 										</p>
 									</div>
 									<div>
@@ -385,7 +406,7 @@ export function MemberRoster({
 				<div className="flex flex-col items-start gap-3 p-6">
 					<p className="font-medium">No members match these filters.</p>
 					<p className="text-sm text-muted-foreground">
-						Try another name, email, or role.
+						{showsEmail ? "Try another name, email, or role." : "Try another name or role."}
 					</p>
 					<Button variant="outline" size="sm" onClick={resetFilters}>
 						<X data-icon="inline-start" />

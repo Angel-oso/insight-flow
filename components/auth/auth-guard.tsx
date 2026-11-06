@@ -1,18 +1,22 @@
 "use client";
 
-import { ConvexError } from "convex/values";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardHeader } from "@/components/ui/card";
 import { LogoMark } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { errorMessage } from "@/components/common/confirm-dialog";
+import { DeletedOrganizations } from "@/components/workspace/deleted-items";
+import { withNext } from "@/lib/safe-next";
+import { useSafeNext } from "./use-safe-next";
 
 /**
- * Gate for the authenticated app: anonymous visitors go to /login, and
+ * Gate for the authenticated app: anonymous visitors go to /login (with
+ * `?next=` set to the page they asked for), and
  * signed-in accounts without any membership land on a server-decided
  * no-workspace screen.
  */
@@ -22,7 +26,9 @@ export function RequireAuth({ children }: { readonly children: ReactNode }) {
 	const status = useQuery(api.setup.queries.status, isLoading ? "skip" : {});
 
 	useEffect(() => {
-		if (!isLoading && !isAuthenticated) router.replace("/login");
+		if (isLoading || isAuthenticated) return;
+		const { pathname, search, hash } = window.location;
+		router.replace(withNext("/login", `${pathname}${search}${hash}`));
 	}, [isLoading, isAuthenticated, router]);
 
 	if (isLoading || !isAuthenticated) {
@@ -76,18 +82,14 @@ function NoWorkspaceAccess({
 			const workspace = await createWorkspace({ name: workspaceName, projectName });
 			router.replace(`/projects/${workspace.projectSlug}/home`);
 		} catch (cause) {
-			setCreateError(
-				cause instanceof ConvexError
-					? cause.message
-					: "Could not create the workspace. Try again.",
-			);
+			setCreateError(errorMessage(cause, "Could not create the workspace. Try again."));
 		} finally {
 			setIsCreatingWorkspace(false);
 		}
 	}
 
 	return (
-		<div className="mx-auto flex min-h-dvh w-full max-w-md items-center px-4 py-10">
+		<div className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-6 px-4 py-10">
 			<Card className="w-full">
 				<CardHeader className="gap-1 pb-6">
 					<LogoMark title="InsightFlow" className="mb-3 size-10" />
@@ -139,11 +141,18 @@ function NoWorkspaceAccess({
 					</Button>
 				</CardHeader>
 			</Card>
+			{/* An owner who deleted their only organization can restore it here;
+			    restoring brings the membership back and reopens the app. */}
+			<DeletedOrganizations />
 		</div>
 	);
 }
 
-/** Gate for /login and /signup: signed-in visitors go straight to /home. */
+/**
+ * Gate for /login and /signup: signed-in visitors go to the sanitized
+ * `?next=` target, else /home. Every auth flow (password, email code,
+ * password reset) finishes here, so they all honor `next`.
+ */
 export function RedirectIfAuthenticated({
 	children,
 }: {
@@ -151,9 +160,7 @@ export function RedirectIfAuthenticated({
 }) {
 	const { isLoading, isAuthenticated } = useConvexAuth();
 	const router = useRouter();
-	const searchParams = useSearchParams();
-	const next = searchParams.get("next");
-	const destination = next?.startsWith("/") && !next.startsWith("//") ? next : "/home";
+	const destination = useSafeNext() ?? "/home";
 
 	useEffect(() => {
 		if (!isLoading && isAuthenticated) router.replace(destination);

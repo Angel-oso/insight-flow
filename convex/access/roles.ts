@@ -43,7 +43,21 @@ export async function resolveOrganizationAccess(
 		organizationMembership(ctx, userId, organizationId),
 	]);
 	if (!user || !organization || !membership) return null;
+	// An organization being deleted grants nothing, effective immediately.
+	if (organization.deletionRequestedAt !== undefined) return null;
 	return resolveRoleAccess(ctx, user, membership.roleIds);
+}
+
+/**
+ * True when `project` is being deleted, or its organization is (or is
+ * gone). Organization deletion marks its projects too; this covers any
+ * project the mark missed, so nothing (intake, webhooks, digests, access)
+ * keeps working for a deleted organization.
+ */
+export async function isProjectDeleted(ctx: QueryCtx | MutationCtx, project: Doc<"projects">) {
+	if (project.deletionRequestedAt !== undefined) return true;
+	const organization = await ctx.db.get("organizations", project.organizationId);
+	return !organization || organization.deletionRequestedAt !== undefined;
 }
 
 /**
@@ -56,7 +70,9 @@ export async function resolveProjectAccess(
 	projectId: Id<"projects">,
 ): Promise<ResolvedAccess | null> {
 	const project = await ctx.db.get("projects", projectId);
-	if (!project) return null;
+	// A project being deleted (on its own or with its organization) is gone
+	// for everyone, effective immediately.
+	if (!project || (await isProjectDeleted(ctx, project))) return null;
 	const [user, link, membership] = await Promise.all([
 		ctx.db.get("users", userId),
 		ctx.db

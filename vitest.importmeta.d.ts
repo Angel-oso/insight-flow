@@ -7,5 +7,5 @@
  * typechecks everywhere and is exactly what the tests need.
  */
 interface ImportMeta {
-	readonly glob: (pattern: string) => Record<string, () => Promise<any>>;
+	readonly glob: (pattern: string) => Record<string, () => Promise<unknown>>;
 }

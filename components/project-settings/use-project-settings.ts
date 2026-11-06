@@ -12,6 +12,8 @@ export type ProjectSettingsUpdate = {
 	status?: Doc<"projects">["status"];
 	inboxEnabled?: boolean;
 	defaultPriority?: Doc<"projects">["defaultPriority"];
+	criticalAlerts?: boolean;
+	weeklyDigest?: boolean;
 };
 
 export function useProjectSettingsData(projectSlug: string) {

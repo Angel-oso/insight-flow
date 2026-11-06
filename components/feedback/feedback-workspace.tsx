@@ -4,18 +4,30 @@ import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useMemo, useState } from "react";
 import { hasCapability, type Capability } from "@/lib/auth/permissions";
 import type { Project } from "@/lib/projects";
-import {
-	finalStatusValues,
-	taxonomyItemFor,
-	type Taxonomies,
-} from "@/lib/taxonomy";
+import { finalStatusValues, type Taxonomies } from "@/lib/taxonomy";
 import type { Id } from "@/convex/_generated/dataModel";
-import type { Assignee, FeedbackItem } from "./model";
-import { useFeedbackDetail, useFeedbackWrites } from "./use-feedback";
+import { presentFeedback, type Assignee } from "./model";
+import { Trash2 } from "lucide-react";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
+import { Button } from "@/components/ui/button";
+import {
+	FEEDBACK_LOAD_BATCH,
+	MAX_BULK_DELETE,
+	useDebouncedValue,
+	useFeedbackDeletion,
+	useFeedbackDetail,
+	useFeedbackPage,
+	useFeedbackWrites,
+	useSelectedFeedback,
+	type FeedbackListFilters,
+} from "./use-feedback";
 import { FeedbackDetail, type FeedbackPermissions } from "./feedback-detail";
 import { FeedbackFilters, type FeedbackFiltersState } from "./feedback-filters";
 import { FEEDBACK_PAGE_SIZE, FeedbackList } from "./feedback-list";
 import { LogFeedback } from "./log-feedback";
+
+const hourMs = 60 * 60 * 1000;
+const dayMs = 24 * hourMs;
 
 const defaultFilters: FeedbackFiltersState = {
 	query: "",
@@ -27,10 +39,55 @@ const defaultFilters: FeedbackFiltersState = {
 	mineOnly: false,
 };
 
+function hasActiveFilters(filters: FeedbackFiltersState) {
+	return (
+		filters.query.trim().length > 0 ||
+		filters.status !== "All statuses" ||
+		filters.priority !== "All priorities" ||
+		filters.category !== "All categories" ||
+		filters.dateRange !== "Any time" ||
+		filters.attentionOnly ||
+		filters.mineOnly
+	);
+}
+
+/**
+ * Maps UI filters to the server query. Time-based filters use the clock
+ * rounded down to the hour so the subscription (and its loaded pages) is
+ * not reset every minute.
+ */
+function toServerFilters(
+	filters: FeedbackFiltersState,
+	search: string,
+	now: number,
+): FeedbackListFilters {
+	const hour = Math.floor(now / hourMs) * hourMs;
+	const days =
+		filters.dateRange === "Past 7 days"
+			? 7
+			: filters.dateRange === "Past 30 days"
+				? 30
+				: null;
+	return {
+		...(search.trim() ? { search: search.trim() } : {}),
+		...(filters.status !== "All statuses" ? { status: filters.status } : {}),
+		...(filters.priority !== "All priorities"
+			? { priority: filters.priority }
+			: {}),
+		...(filters.category !== "All categories"
+			? { category: filters.category }
+			: {}),
+		...(filters.mineOnly ? { assignee: "me" as const } : {}),
+		...(days !== null ? { receivedAfter: hour - days * dayMs } : {}),
+		...(filters.attentionOnly ? { attention: { now: hour } } : {}),
+	};
+}
+
 export function FeedbackWorkspace({
-	items,
 	assignees,
 	taxonomies,
+	totalItems,
+	laneRank,
 	now,
 	archived,
 	project,
@@ -41,9 +98,12 @@ export function FeedbackWorkspace({
 }: {
 	readonly viewerId: Id<"users"> | null;
 	readonly defaultPriority: string;
-	readonly items: readonly FeedbackItem[];
 	readonly assignees: readonly Assignee[];
 	readonly taxonomies: Taxonomies;
+	/** Every item in the project (aggregate count). */
+	readonly totalItems: number;
+	/** Severity lane = highest rank present in the open backlog. */
+	readonly laneRank: number;
 	readonly now: number;
 	readonly archived: boolean;
 	readonly project: Project;
@@ -64,7 +124,19 @@ export function FeedbackWorkspace({
 			!archived && !pending && hasCapability(grantedPermissions, "feedback.update"),
 		canComment:
 			!archived && !pending && hasCapability(grantedPermissions, "feedback.comment"),
+		canDelete: !archived && hasCapability(grantedPermissions, "project.manage"),
 	};
+	const { deleteOne, deleteMany } = useFeedbackDeletion(project.slug);
+	const [checked, setChecked] = useState<ReadonlySet<string>>(() => new Set());
+	const [confirmingBulk, setConfirmingBulk] = useState(false);
+	const [notice, setNotice] = useState<string | null>(null);
+	const toggleChecked = (id: Id<"feedback">) =>
+		setChecked((current) => {
+			const next = new Set(current);
+			if (next.has(id)) next.delete(id);
+			else if (next.size < MAX_BULK_DELETE) next.add(id);
+			return next;
+		});
 	// Members start on their own queue; triagers start on the whole inbox.
 	const [filters, setFilters] = useState<FeedbackFiltersState>(() => ({
 		...defaultFilters,
@@ -74,102 +146,58 @@ export function FeedbackWorkspace({
 	const canLog = !archived && hasCapability(grantedPermissions, "feedback.triage");
 	const [selectedId, setSelectedId] = useQueryState("feedback", parseAsString);
 	const finals = useMemo(() => finalStatusValues(taxonomies), [taxonomies]);
-	// Severity lane = highest rank present in the open backlog.
-	const laneRank = useMemo(() => {
-		let lane = -1;
-		for (const item of items) {
-			if (finals.has(item.status)) continue;
-			const rank = taxonomyItemFor(taxonomies.priorities, item.priority).rank;
-			if (rank > lane) lane = rank;
-		}
-		return lane;
-	}, [items, finals, taxonomies]);
-	const visibleItems = useMemo(() => {
-		const matches = items.filter((item) => {
-				const searchText =
-					`${item.title} ${item.description} ${item.project} ${item.sender?.name ?? ""} ${item.sender?.email ?? ""}`.toLowerCase();
-				const matchesQuery = searchText.includes(
-					filters.query.trim().toLowerCase(),
-				);
-				const matchesStatus =
-					filters.status === "All statuses" || item.status === filters.status;
-				const matchesPriority =
-					filters.priority === "All priorities" ||
-					item.priority === filters.priority;
-				const matchesCategory =
-					filters.category === "All categories" ||
-					item.category === filters.category;
-				const matchesDate =
-					filters.dateRange === "Any time" ||
-					(filters.dateRange === "Past 7 days" && item.ageDays <= 7) ||
-					(filters.dateRange === "Past 30 days" && item.ageDays <= 30);
-				const needsAttention =
-					!finals.has(item.status) &&
-					(taxonomyItemFor(taxonomies.priorities, item.priority).rank >=
-						laneRank - 2 ||
-						item.assigneeId === null ||
-						item.isStale);
 
-				const matchesMine = !filters.mineOnly || item.assigneeId === viewerId;
-
-				return (
-					matchesQuery &&
-					matchesStatus &&
-					matchesPriority &&
-					matchesCategory &&
-					matchesDate &&
-					matchesMine &&
-					(!filters.attentionOnly || needsAttention)
-				);
-			});
-		if (!filters.mineOnly) return matches;
-		// Personal queue: open work first, then highest priority, then oldest.
-		const rankOf = (item: FeedbackItem) =>
-			taxonomyItemFor(taxonomies.priorities, item.priority).rank;
-		return [...matches].sort(
-			(a, b) =>
-				Number(finals.has(a.status)) - Number(finals.has(b.status)) ||
-				rankOf(b) - rankOf(a) ||
-				a.receivedAtMs - b.receivedAtMs,
-		);
-	}, [filters, items, finals, laneRank, taxonomies, viewerId]);
-
-	const selectedItem = items.find((item) => item.id === selectedId) ?? null;
-	const [pageState, setPageState] = useState(() => {
-		const selectedIndex = visibleItems.findIndex(
-			(item) => item.id === selectedId,
-		);
-		return {
-			page:
-				selectedIndex === -1
-					? 1
-					: Math.floor(selectedIndex / FEEDBACK_PAGE_SIZE) + 1,
-			selectedId,
-		};
-	});
-	const pageCount = Math.max(
-		1,
-		Math.ceil(visibleItems.length / FEEDBACK_PAGE_SIZE),
+	const search = useDebouncedValue(filters.query);
+	const serverFilters = useMemo(
+		() => toServerFilters(filters, search, now),
+		[filters, search, now],
 	);
-	const selectedPage =
-		pageState.selectedId === selectedId
-			? null
-			: (() => {
-				const selectedIndex = visibleItems.findIndex(
-					(item) => item.id === selectedId,
-				);
-				return selectedIndex === -1
-					? 1
-					: Math.floor(selectedIndex / FEEDBACK_PAGE_SIZE) + 1;
-			})();
-	const page = Math.min(selectedPage ?? pageState.page, pageCount);
-	const paginatedItems = useMemo(
+	const { results, status, loadMore } = useFeedbackPage(
+		project.slug,
+		serverFilters,
+	);
+	const items = useMemo(
 		() =>
-			visibleItems.slice(
-				(page - 1) * FEEDBACK_PAGE_SIZE,
-				page * FEEDBACK_PAGE_SIZE,
-			),
-		[page, visibleItems],
+			results.map((item) => presentFeedback(item, project.name, now, finals)),
+		[results, project.name, now, finals],
+	);
+	const canLoadMore = status === "CanLoadMore";
+	const hasMore = canLoadMore || status === "LoadingMore";
+
+	const [requestedPage, setPage] = useState(1);
+	const pageCount = Math.max(1, Math.ceil(items.length / FEEDBACK_PAGE_SIZE));
+	// Loaded pages can shrink (filters, reactive updates): stay in range,
+	// but allow sitting on the page that is being fetched.
+	const page = Math.min(requestedPage, hasMore ? pageCount + 1 : pageCount);
+	const pageItems = useMemo(
+		() =>
+			items.slice((page - 1) * FEEDBACK_PAGE_SIZE, page * FEEDBACK_PAGE_SIZE),
+		[items, page],
+	);
+
+	// The server caps rows scanned per page (maximumRowsRead), so selective
+	// filters can return short or empty batches that still have more behind
+	// them. Keep fetching until the visible page is full or results run out.
+	useEffect(() => {
+		if (canLoadMore && pageItems.length < FEEDBACK_PAGE_SIZE)
+			loadMore(FEEDBACK_LOAD_BATCH);
+	}, [canLoadMore, pageItems.length, loadMore]);
+
+	// The selected item may live outside the loaded pages (deep links from
+	// the overview or notifications): resolve it on its own.
+	const selected = useSelectedFeedback(project.slug, selectedId);
+	const selectedItem = useMemo(() => {
+		if (!selectedId) return null;
+		const loaded = items.find((item) => item.id === selectedId);
+		if (loaded) return loaded;
+		return selected ? presentFeedback(selected, project.name, now, finals) : null;
+	}, [selectedId, items, selected, project.name, now, finals]);
+	const visibleItems = useMemo(
+		() =>
+			selectedItem && !pageItems.some((item) => item.id === selectedItem.id)
+				? [selectedItem, ...pageItems]
+				: pageItems,
+		[pageItems, selectedItem],
 	);
 	const detail = useFeedbackDetail(
 		project.slug,
@@ -181,34 +209,62 @@ export function FeedbackWorkspace({
 	const detailItem = detail?.item ?? selectedItem;
 
 	useEffect(() => {
-		if (selectedId !== null && !selectedItem) void setSelectedId(null);
-	}, [selectedId, selectedItem, setSelectedId]);
+		// Unknown, malformed or other-project ids clear the deep link.
+		if (selectedId !== null && selected === null) void setSelectedId(null);
+	}, [selectedId, selected, setSelectedId]);
 
+	// A new filter set or search starts a new result list: drop the bulk
+	// selection so it never deletes items the user can no longer see. Paging
+	// within the same filters keeps it.
 	const updateFilters = (nextFilters: FeedbackFiltersState) => {
 		setFilters(nextFilters);
-		setPageState({ page: 1, selectedId });
+		setPage(1);
+		setChecked((current) => (current.size === 0 ? current : new Set()));
 	};
 
-	const selectFeedback = (id: FeedbackItem["id"]) => {
-		if (id === selectedId) {
-			void setSelectedId(null);
-			setPageState({ page, selectedId: null });
-			return;
-		}
-		void setSelectedId(id);
-		const selectedIndex = visibleItems.findIndex((item) => item.id === id);
-		setPageState({
-			page:
-				selectedIndex === -1
-					? 1
-					: Math.floor(selectedIndex / FEEDBACK_PAGE_SIZE) + 1,
-			selectedId: id,
-		});
+	const selectFeedback = (id: Id<"feedback">) => {
+		void setSelectedId(id === selectedId ? null : id);
 	};
 
 	const handlePageChange = (nextPage: number) => {
-		setPageState({ page: nextPage, selectedId });
+		// Clamp here too: repeated clicks while a batch loads must not run
+		// requestedPage past the page being fetched.
+		setPage(
+			Math.max(1, Math.min(nextPage, hasMore ? pageCount + 1 : pageCount)),
+		);
+		// Fetch ahead when the next page reaches past what is loaded.
+		if (nextPage * FEEDBACK_PAGE_SIZE >= items.length && canLoadMore)
+			loadMore(FEEDBACK_LOAD_BATCH);
 	};
+
+	const deleteSelected = async () => {
+		const ids = [...checked] as Id<"feedback">[];
+		const deleted = await deleteMany(ids);
+		setChecked(new Set());
+		if (selectedId && ids.includes(selectedId as Id<"feedback">)) void setSelectedId(null);
+		setNotice(`Deleted ${deleted} feedback ${deleted === 1 ? "item" : "items"}.`);
+	};
+
+	const deleteSelectedItem = async (id: Id<"feedback">) => {
+		await deleteOne(id);
+		setChecked((current) => {
+			if (!current.has(id)) return current;
+			const next = new Set(current);
+			next.delete(id);
+			return next;
+		});
+		void setSelectedId(null);
+		setNotice("Feedback deleted.");
+	};
+
+	const filtered = hasActiveFilters(filters);
+	const checkedOnPage = pageItems.reduce(
+		(count, item) => (checked.has(item.id) ? count + 1 : count),
+		0,
+	);
+	const checkedElsewhere = checked.size - checkedOnPage;
+	const checkedLabel = `${checked.size} feedback ${checked.size === 1 ? "item" : "items"} selected`;
+	const matchLabel = `${items.length}${hasMore ? "+" : ""}`;
 
 	return (
 		<section className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
@@ -224,7 +280,11 @@ export function FeedbackWorkspace({
 					</div>
 					<div className="flex items-center gap-3">
 						<p className="text-sm text-muted-foreground">
-							{visibleItems.length} of {items.length} items
+							{status === "LoadingFirstPage"
+								? `${totalItems} items`
+								: filtered
+									? `${matchLabel} of ${totalItems} items`
+									: `${totalItems} items`}
 						</p>
 						{canLog ? (
 							<LogFeedback
@@ -232,8 +292,7 @@ export function FeedbackWorkspace({
 								defaultPriority={defaultPriority}
 								taxonomies={taxonomies}
 								onLogged={(feedbackId) => {
-									setFilters(defaultFilters);
-									setPageState({ page: 1, selectedId: feedbackId });
+									updateFilters(defaultFilters);
 									void setSelectedId(feedbackId);
 								}}
 							/>
@@ -246,11 +305,52 @@ export function FeedbackWorkspace({
 					{error}
 				</p>
 			) : null}
+			{notice ? (
+				<p role="status" className="px-5 py-3 text-dashboard-success">
+					{notice}
+				</p>
+			) : null}
 			{archived ? (
 				<p className="px-5 py-3 text-muted-foreground">
 					This project is archived. Feedback is read-only.
 				</p>
 			) : null}
+			{permissions.canDelete && checked.size > 0 ? (
+				<div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/40 px-5 py-2.5">
+					<p className="text-sm" role="status">
+						{checkedLabel}
+						{checkedElsewhere > 0
+							? ` (${checkedElsewhere} on other pages)`
+							: ""}
+						{checked.size >= MAX_BULK_DELETE ? ` Â· maximum ${MAX_BULK_DELETE}` : ""}
+					</p>
+					<div className="flex items-center gap-2">
+						<Button size="sm" variant="ghost" onClick={() => setChecked(new Set())}>
+							Clear selection
+						</Button>
+						<Button
+							size="sm"
+							variant="destructive"
+							onClick={() => {
+								setNotice(null);
+								setConfirmingBulk(true);
+							}}
+						>
+							<Trash2 data-icon="inline-start" />
+							Delete {checked.size} selected
+						</Button>
+					</div>
+				</div>
+			) : null}
+			<ConfirmDialog
+				open={confirmingBulk}
+				onOpenChange={setConfirmingBulk}
+				title={`Delete ${checked.size} feedback ${checked.size === 1 ? "item" : "items"}?`}
+				description="The selected items are removed with their internal notes and activity. Use this for spam and duplicates; it cannot be undone."
+				confirmLabel="Delete feedback"
+				pendingLabel="Deleting…"
+				onConfirm={deleteSelected}
+			/>
 			<FeedbackFilters
 				canFilterMine={viewerId !== null}
 				filters={filters}
@@ -259,17 +359,28 @@ export function FeedbackWorkspace({
 				onReset={() => updateFilters(defaultFilters)}
 				page={page}
 				pageCount={pageCount}
+				hasMore={hasMore}
+				loadingMore={status === "LoadingMore"}
 				pageSize={FEEDBACK_PAGE_SIZE}
-				totalItems={visibleItems.length}
+				loadedItems={items.length}
 				onPageChange={handlePageChange}
 			/>
 			<div className="min-w-0">
 				<FeedbackList
-					items={paginatedItems}
+					items={visibleItems}
+					loading={
+						status === "LoadingFirstPage" ||
+						(status === "LoadingMore" && pageItems.length === 0)
+					}
 					selectedId={selectedItem?.id ?? null}
 					assignees={assignees}
 					taxonomies={taxonomies}
 					onSelect={selectFeedback}
+					selection={
+						permissions.canDelete
+							? { checked, onToggle: toggleChecked }
+							: undefined
+					}
 					renderDetail={(item) => (
 						<FeedbackDetail
 							key={item.id}
@@ -279,11 +390,14 @@ export function FeedbackWorkspace({
 							assignees={assignees}
 							comments={detail?.comments ?? []}
 							activities={detail?.activities ?? []}
+							olderComments={detail?.olderComments}
+							olderActivities={detail?.olderActivities}
 							permissions={permissions}
 							taxonomies={taxonomies}
 							laneRank={laneRank}
 							onUpdate={updateFeedback}
 							onAddComment={addComment}
+							onDelete={deleteSelectedItem}
 						/>
 					)}
 				/>

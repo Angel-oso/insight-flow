@@ -1,44 +1,51 @@
-import { convexTest } from "convex-test";
+import { newConvexTest } from "../../test/convex-test";
 import { expect, test } from "vitest";
 import { api } from "../_generated/api";
 import schema from "../schema";
+import { insertFeedbackRow } from "../feedback/store";
 
 const modules = {
 	...Object.fromEntries(Object.entries(import.meta.glob("../**/*.ts")).map(([path, load]) => [path.replace(/^\.\.\//, "./"), load])),
 	...Object.fromEntries(Object.entries(import.meta.glob("./**/*.ts")).map(([path, load]) => [path.replace(/^\.\//, "./taxonomies/"), load])),
 };
 
-test("taxonomy removal refuses to truncate organizations with more than 100 projects", async () => {
-	const t = convexTest(schema, modules);
+test("taxonomy removal checks every project, including deleted ones awaiting restore", async () => {
+	const t = newConvexTest(modules);
 	const userId = await t.run((ctx) => ctx.db.insert("users", { name: "Owner" }));
 	const owner = t.withIdentity({ subject: userId });
 	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, { name: "Bounded", projectName: "Bounded" });
-	const fields = await t.run(async (ctx) => {
+	// 40 live projects plus 140 deleted ones still inside their restore window.
+	const deletedId = await t.run(async (ctx) => {
 		const project = await ctx.db.query("projects").withIndex("by_slug", (q) => q.eq("slug", projectSlug)).unique();
 		const { _id, _creationTime, ...fields } = project!;
 		void _id; void _creationTime;
-		for (let i = 1; i < 100; i += 1) {
-			await ctx.db.insert("projects", { ...fields, slug: `bounded-${i}` });
-		}
-		return fields;
+		for (let i = 1; i < 40; i += 1) await ctx.db.insert("projects", { ...fields, slug: `live-${i}` });
+		let last = null;
+		for (let i = 0; i < 140; i += 1)
+			last = await ctx.db.insert("projects", { ...fields, slug: `deleted-${i}`, deletionRequestedAt: Date.now() });
+		return last!;
 	});
 	const option = await owner.mutation(api.taxonomies.mutations.createOption, {
-		projectSlug, key: "category", label: "Removable", color: "#111111",
+		projectSlug, key: "status", label: "Removable", color: "#111111",
 	});
-	await owner.mutation(api.taxonomies.mutations.removeOption, { projectSlug, key: "category", value: option.value });
-	const blocked = await owner.mutation(api.taxonomies.mutations.createOption, {
-		projectSlug, key: "category", label: "Blocked", color: "#111111",
+	const used = await owner.mutation(api.taxonomies.mutations.createOption, {
+		projectSlug, key: "status", label: "Parked", color: "#111111",
 	});
-	await t.run((ctx) => ctx.db.insert("projects", { ...fields, slug: "bounded-101" }));
+	// The last project scanned is a deleted one that still uses "Parked".
+	await t.run((ctx) => insertFeedbackRow(ctx, {
+		projectId: deletedId, title: "Parked item", description: "", category: "Bug", priority: "Low",
+		status: used.value, assigneeId: null, sender: null, receivedAt: 1, updatedAt: 1,
+	}));
+	await owner.mutation(api.taxonomies.mutations.removeOption, { projectSlug, key: "status", value: option.value });
 	const before = await t.run((ctx) => ctx.db.query("taxonomies").collect());
 	await expect(owner.mutation(api.taxonomies.mutations.removeOption, {
-		projectSlug, key: "category", value: blocked.value,
-	})).rejects.toThrow(/up to 100 projects/i);
+		projectSlug, key: "status", value: used.value,
+	})).rejects.toThrow(/still used by feedback/i);
 	expect(await t.run((ctx) => ctx.db.query("taxonomies").collect())).toEqual(before);
 });
 
 test("missing organization taxonomies ignore legacy docs and materialize on first write", async () => {
-	const t = convexTest(schema, modules);
+	const t = newConvexTest(modules);
 	const userId = await t.run((ctx) => ctx.db.insert("users", { name: "Owner" }));
 	const owner = t.withIdentity({ subject: userId });
 	await owner.mutation(api.setup.mutations.createWorkspace, { name: "Original", projectName: "Original" });
@@ -72,7 +79,7 @@ test("missing organization taxonomies ignore legacy docs and materialize on firs
 });
 
 test("a priority used as a project's default cannot be removed", async () => {
-	const t = convexTest(schema, modules);
+	const t = newConvexTest(modules);
 	const userId = await t.run((ctx) => ctx.db.insert("users", { name: "Owner" }));
 	const owner = t.withIdentity({ subject: userId });
 	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, { name: "Defaults", projectName: "Defaults" });

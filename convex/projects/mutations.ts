@@ -1,18 +1,15 @@
 import { ConvexError, v } from "convex/values";
 import { hasCapability } from "../../lib/auth/permissions";
 import { resolveOrganizationAccess, resolveProjectAccess } from "../access/roles";
+import { logAudit } from "../audit/log";
 import { mutation } from "../_generated/server";
 import { requireUserId } from "../feedback/access";
 import { getTaxonomies } from "../taxonomies/lib";
+import { slugify, uniqueSlug } from "../lib/slugs";
+import { enforceRateLimit } from "../rateLimits";
 
-function slugFromName(name: string) {
-	return name
-		.normalize("NFD")
-		.replace(/[\u0300-\u036f]/g, "")
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/(^-|-$)/g, "");
-}
+// Matches the organization overview's read bound (ORGANIZATION_PROJECT_LIMIT).
+export const MAX_PROJECTS_PER_ORGANIZATION = 50;
 
 export const create = mutation({
 	args: { currentProjectSlug: v.optional(v.string()), organizationId: v.optional(v.id("organizations")), name: v.string(), description: v.string() },
@@ -38,13 +35,26 @@ export const create = mutation({
 			throw new ConvexError("Give the project a name between 1 and 80 characters.");
 		if (description.length > 500)
 			throw new ConvexError("Keep the description under 500 characters.");
-		const slug = slugFromName(name);
-		if (!slug) throw new ConvexError("Give the project a name with letters or numbers.");
-		const existing = await ctx.db
+		if (!slugify(name)) throw new ConvexError("Give the project a name with letters or numbers.");
+
+		// Organization views read a bounded number of projects, so
+		// creation stops there. Names stay unique within the organization (the
+		// caller can already see them); slugs are global and get a random suffix
+		// on collision so other tenants' names are never revealed.
+		// Only live projects count: projects being deleted are excluded by the
+		// index range itself, so the read stays bounded by the limit.
+		const siblings = await ctx.db
 			.query("projects")
-			.withIndex("by_slug", (q) => q.eq("slug", slug))
-			.unique();
-		if (existing) throw new ConvexError("A project with this name already exists.");
+			.withIndex("by_organizationId_deletionRequestedAt", (q) =>
+				q.eq("organizationId", organizationId).eq("deletionRequestedAt", undefined),
+			)
+			.take(MAX_PROJECTS_PER_ORGANIZATION);
+		if (siblings.length >= MAX_PROJECTS_PER_ORGANIZATION)
+			throw new ConvexError(`A workspace can have up to ${MAX_PROJECTS_PER_ORGANIZATION} projects.`);
+		if (siblings.some((project) => project.name.toLowerCase() === name.toLowerCase()))
+			throw new ConvexError("This workspace already has a project with this name.");
+		await enforceRateLimit(ctx, "createProject", userId);
+		const slug = (await uniqueSlug(ctx, "projects", name))!;
 
 		const [{ priorities }, projectRole] = await Promise.all([
 			getTaxonomies(ctx, organizationId),
@@ -65,7 +75,9 @@ export const create = mutation({
 			slug,
 			description: description || "New project workspace.",
 			status: "Active",
-			inboxEnabled: true,
+			// The public form starts closed: slugs are guessable, so admins
+			// open it on purpose from project settings.
+			inboxEnabled: false,
 			defaultPriority: defaultPriority.value,
 			criticalAlerts: false,
 			weeklyDigest: false,
@@ -81,6 +93,13 @@ export const create = mutation({
 		await ctx.db.insert("activities", {
 			projectId, actorId: userId, type: "project_created",
 			message: `Created project ${name}`, createdAt: now,
+		});
+		await logAudit(ctx, {
+			organizationId,
+			projectId,
+			actorId: userId,
+			action: "project.created",
+			summary: `Created project ${name}`,
 		});
 		return { slug, name, description: description || "New project workspace." };
 	},

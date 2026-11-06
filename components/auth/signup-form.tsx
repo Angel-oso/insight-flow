@@ -1,12 +1,17 @@
 "use client";
 
 import { useAuthActions } from "@convex-dev/auth/react";
+import Link from "next/link";
 import { useConvexAuth } from "convex/react";
 import { useEffect, useState, type FormEvent } from "react";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CAPTCHA_REQUIRED, useAuthCaptcha } from "./auth-captcha";
+import { authErrorMessage, EMAIL_PATTERN, normalizeEmail } from "./auth-errors";
+import { EmailCodeStep, FormAlert } from "./email-code-step";
 import { GoogleMark } from "./google-mark";
+import { useSafeNext } from "./use-safe-next";
 
 type Errors = { name?: string; email?: string; password?: string; form?: string };
 
@@ -15,7 +20,7 @@ function validate(name: string, email: string, password: string): Errors {
 	if (name.trim().length < 2) {
 		errors.name = "Tell us your name — at least 2 characters.";
 	}
-	if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+	if (!EMAIL_PATTERN.test(email.trim())) {
 		errors.email = "Enter a valid email address, like you@studio.com.";
 	}
 	if (password.length < 8 || password.length > 128) {
@@ -30,6 +35,9 @@ export function SignupForm() {
 	const [showPassword, setShowPassword] = useState(false);
 	const [errors, setErrors] = useState<Errors>({});
 	const [busy, setBusy] = useState<"idle" | "google" | "password">("idle");
+	const [pending, setPending] = useState<{ name: string; email: string; password: string } | null>(null);
+	const safeNext = useSafeNext();
+	const captcha = useAuthCaptcha();
 
 	useEffect(() => {
 		if (busy === "idle" || isAuthenticated) return;
@@ -47,19 +55,15 @@ export function SignupForm() {
 		setErrors({});
 		setBusy("google");
 		try {
-			const result = await signIn("google");
+			// Back to the page that sent the visitor here (e.g. an invitation).
+			const result = await signIn("google", { redirectTo: safeNext ?? "/home" });
 			if (!result.redirect && !result.signingIn) {
 				setBusy("idle");
 				setErrors({ form: "Google sign-up did not start. Try again." });
 			}
 		} catch (error) {
 			setBusy("idle");
-			setErrors({
-				form:
-					error instanceof Error
-						? error.message
-						: "Google sign-up failed. Try again.",
-			});
+			setErrors({ form: authErrorMessage(error, "google") });
 		}
 	}
 
@@ -67,28 +71,80 @@ export function SignupForm() {
 		event.preventDefault();
 		const data = new FormData(event.currentTarget);
 		const name = String(data.get("name") ?? "").trim();
-		const email = String(data.get("email") ?? "").trim();
+		const email = normalizeEmail(String(data.get("email") ?? ""));
 		const password = String(data.get("password") ?? "");
 		const next = validate(name, email, password);
 		setErrors(next);
 		if (Object.keys(next).length > 0) return;
+		if (!captcha.ready) {
+			setErrors({ form: CAPTCHA_REQUIRED });
+			return;
+		}
 
 		setBusy("password");
 		try {
-			const result = await signIn("password", { name, email, password, flow: "signUp" });
+			const result = await signIn("password", {
+				name,
+				email,
+				password,
+				flow: "signUp",
+				...captcha.take(),
+			});
 			if (!result.signingIn) {
+				// A code is on its way, or (when the address already has an
+				// account) a notice to its owner: both look the same here.
 				setBusy("idle");
-				setErrors({ form: "Account creation did not finish. Try again." });
+				setPending({ name, email, password });
 			}
 		} catch (error) {
 			setBusy("idle");
-			setErrors({
-				form:
-					error instanceof Error
-						? error.message
-						: "Account creation failed. Try again.",
-			});
+			setErrors({ form: authErrorMessage(error, "signUp") });
 		}
+	}
+
+	if (pending) {
+		return (
+			<EmailCodeStep
+				email={pending.email}
+				onVerify={async (code, captchaParams) => {
+					try {
+						const result = await signIn("password", {
+							email: pending.email,
+							// The code only counts together with the account's password.
+							password: pending.password,
+							code,
+							flow: "email-verification",
+							...captchaParams,
+						});
+						if (!result.signingIn) throw new Error(authErrorMessage(null, "verify"));
+						// The session is starting; don't keep the password around.
+						setPending((current) => (current ? { ...current, password: "" } : current));
+						return true;
+					} catch (error) {
+						throw new Error(authErrorMessage(error, "verify"));
+					}
+				}}
+				onResend={async (captchaParams) => {
+					try {
+						// The account exists now: signing in again sends a fresh code.
+						await signIn("password", {
+							email: pending.email,
+							password: pending.password,
+							flow: "signIn",
+							...captchaParams,
+						});
+					} catch (error) {
+						throw new Error(authErrorMessage(error, "resend"));
+					}
+				}}
+				onBack={() => {
+					setErrors({});
+					setPending(null);
+				}}
+				backLabel="Back"
+				hint="Already have an account with this email? Then we emailed you a sign-in reminder instead of a code: sign in or reset your password."
+			/>
+		);
 	}
 
 	return (
@@ -119,14 +175,7 @@ export function SignupForm() {
 			</div>
 
 			<form onSubmit={handleSubmit} noValidate className="space-y-4">
-				{errors.form ? (
-					<p
-						role="alert"
-						className="rounded-lg bg-destructive/10 px-3 py-2.5 text-xs leading-5 text-destructive"
-					>
-						{errors.form}
-					</p>
-				) : null}
+				{errors.form ? <FormAlert>{errors.form}</FormAlert> : null}
 
 				<div className="space-y-1.5">
 					<label htmlFor="signup-name" className="text-sm font-medium">
@@ -219,6 +268,8 @@ export function SignupForm() {
 					)}
 				</div>
 
+				{captcha.widget}
+
 				<Button
 					type="submit"
 					size="lg"
@@ -236,8 +287,10 @@ export function SignupForm() {
 				</Button>
 
 				<p className="text-xs leading-5 text-muted-foreground">
-					By continuing you agree to the Terms and Privacy Policy. They will
-					link out once legal copy is ready.
+					By creating an account you agree to the{" "}
+					<Link href="/terms" className="underline underline-offset-4 hover:text-foreground">Terms of Service</Link>{" "}
+					and{" "}
+					<Link href="/privacy" className="underline underline-offset-4 hover:text-foreground">Privacy Policy</Link>.
 				</p>
 			</form>
 		</div>

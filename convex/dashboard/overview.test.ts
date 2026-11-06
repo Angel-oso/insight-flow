@@ -1,9 +1,10 @@
-import { convexTest } from "convex-test";
+import { newConvexTest } from "../../test/convex-test";
 import { ConvexError } from "convex/values";
 import { expect, test } from "vitest";
 import { api } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import schema from "../schema";
+import { insertFeedbackRow } from "../feedback/store";
 import { capabilities, type Capability } from "../../lib/auth/permissions";
 
 const modules = {
@@ -16,7 +17,7 @@ const to = from + 3 * day;
 const windowArgs = { projectSlug: "portal", from, to };
 
 async function fixture() {
-	const t = convexTest(schema, modules);
+	const t = newConvexTest(modules);
 	const ids = await t.run(async (ctx) => {
 		const permissionIds = new Map<Capability, Id<"permissions">>();
 		for (const key of capabilities) permissionIds.set(key, await ctx.db.insert("permissions", { key }));
@@ -47,7 +48,7 @@ async function fixture() {
 			["status", [{ value: "open", label: "Open", rank: 1, tone: "info" }, { value: "done", label: "Done", rank: 8, tone: "success", isFinal: true }]],
 			["category", [{ value: "idea", label: "Idea", rank: 1, tone: "primary" }]],
 		] as const) await ctx.db.insert("taxonomies", { organizationId, key, label: key, items: items.map((item) => ({ ...item })) });
-		const add = (title: string, priority: string, receivedAt: number, assigneeId: Id<"users"> | null = member, completedAt?: number) => ctx.db.insert("feedback", {
+		const add = (title: string, priority: string, receivedAt: number, assigneeId: Id<"users"> | null = member, completedAt?: number) => insertFeedbackRow(ctx, {
 			projectId, title, priority, receivedAt, assigneeId, completedAt, updatedAt: receivedAt,
 			status: completedAt === undefined ? "open" : "done", description: "Feedback", category: "idea", sender: null,
 		});
@@ -126,7 +127,7 @@ test("365-day and partial-day windows are valid", async () => {
 test("anonymous and non-member callers cannot read overview", async () => {
 	const { t, ids } = await fixture();
 	await expect(t.query(api.dashboard.overview.get, windowArgs)).rejects.toThrow(/sign in/i);
-	await expect(t.withIdentity({ subject: ids.outsider }).query(api.dashboard.overview.get, windowArgs)).rejects.toThrow(/denied/i);
+	await expect(t.withIdentity({ subject: ids.outsider }).query(api.dashboard.overview.get, windowArgs)).rejects.toThrow(/Project not found/);
 });
 
 test("personal lists are capped, and equal-time comments are not newer", async () => {
@@ -134,7 +135,7 @@ test("personal lists are capped, and equal-time comments are not newer", async (
 	await t.run(async (ctx) => {
 		const item = (await ctx.db.get("feedback", ids.low))!;
 		for (let index = 0; index < 9; index++) {
-			const feedbackId = await ctx.db.insert("feedback", {
+			const feedbackId = await insertFeedbackRow(ctx, {
 				projectId: item.projectId, title: `Extra ${index}`, description: "Extra", category: "idea", priority: "routine",
 				status: "open", assigneeId: ids.member, sender: null, receivedAt: from, updatedAt: from,
 			});
@@ -151,7 +152,7 @@ test("personal lists are capped, and equal-time comments are not newer", async (
 });
 
 test("project and organization overviews share one health rule, including a high open backlog", async () => {
-	const t = convexTest(schema, modules);
+	const t = newConvexTest(modules);
 	const ownerId = await t.run((ctx) => ctx.db.insert("users", { name: "Owner" }));
 	const owner = t.withIdentity({ subject: ownerId });
 	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, {
@@ -162,7 +163,7 @@ test("project and organization overviews share one health rule, including a high
 		t.run(async (ctx) => {
 			const project = (await ctx.db.query("projects").withIndex("by_slug", (q) => q.eq("slug", projectSlug)).unique())!;
 			for (let i = 0; i < count; i += 1) {
-				await ctx.db.insert("feedback", {
+				await insertFeedbackRow(ctx, {
 					projectId: project._id, title: `Item ${i}`, description: "Open item", category: "Bug",
 					priority: "Low", status: "New", assigneeId: null, sender: null,
 					receivedAt: from, updatedAt: from,

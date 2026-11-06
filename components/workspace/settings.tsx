@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
-import { ConvexError } from "convex/values";
 import type { FunctionReturnType } from "convex/server";
 import { useState, type FormEvent } from "react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { errorMessage } from "@/components/common/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,9 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ActivityLog } from "./activity-log";
+import { DeletedOrganizations, DeletedProjects } from "./deleted-items";
+import { DeleteOrganization, LeaveOrganization, OrganizationMembers } from "./organization-members";
 import { OrganizationSwitcher } from "./organization-switcher";
 import { useOrganization } from "./use-organization";
 
@@ -25,15 +28,23 @@ type Settings = FunctionReturnType<typeof api.organizations.queries.settings>;
 
 export function WorkspaceSettings() {
 	const { organization, organizations, loading, setOrganization } = useOrganization();
-	if (!organization) return <p role="status" className="p-8 text-sm text-muted-foreground">{loading ? "Loading your organizations…" : "This organization is not available to your account. Return to Workspace to choose your organization."}</p>;
+	if (!organization) return <div className="space-y-6 p-8">
+		<p role="status" className="text-sm text-muted-foreground">{loading ? "Loading your organizations…" : "This organization is not available to your account. Return to Workspace to choose your organization."}</p>
+		{loading ? null : <div className="max-w-2xl"><DeletedOrganizations /></div>}
+	</div>;
 	return <main className="mx-auto w-full max-w-[1520px] px-4 py-7 sm:px-6 sm:py-9 lg:px-8 xl:px-10 xl:py-10">
 		<header className="space-y-4 border-b pb-7">
 			<Button variant="ghost" nativeButton={false} render={<Link href={`/workspace?organization=${organization.id}`} />}>Back to workspace</Button>
 			<h1 className="font-heading text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">Organization settings</h1>
-			<p className="text-sm text-muted-foreground">Manage the name and ownership of {organization.name}.</p>
+			<p className="text-sm text-muted-foreground">Manage the name, members and ownership of {organization.name}.</p>
 			<OrganizationSwitcher organization={organization} organizations={organizations ?? []} onChange={setOrganization} />
 		</header>
-		{organization.isAdmin ? <AdminSettings key={organization.id} organizationId={organization.id} /> : <p className="mt-7 text-sm text-muted-foreground">Only organization administrators can change these settings.</p>}
+		{organization.isAdmin ? <AdminSettings key={organization.id} organizationId={organization.id} /> : <div className="mt-7 max-w-2xl space-y-6">
+			<p className="text-sm text-muted-foreground">Only organization administrators can change these settings.</p>
+			{/* Owners are always administrators, so a non-admin can always leave. */}
+			<LeaveOrganization organizationId={organization.id} organizationName={organization.name} isOwner={false} />
+			<DeletedOrganizations />
+		</div>}
 	</main>;
 }
 
@@ -63,7 +74,7 @@ function SettingsForms({ organizationId, settings }: { readonly organizationId: 
 			await rename({ organizationId, name });
 			setRenameMessage("Organization name saved.");
 		} catch (cause) {
-			setRenameError(cause instanceof ConvexError ? cause.message : "Could not save the name. Try again.");
+			setRenameError(errorMessage(cause, "Could not save the name. Try again."));
 		} finally { setBusy(false); }
 	}
 	async function confirmTransfer() {
@@ -73,7 +84,7 @@ function SettingsForms({ organizationId, settings }: { readonly organizationId: 
 			await transfer({ organizationId, userId: target.id });
 			setConfirmOpen(false); setTargetId(""); setTransferred(true);
 		} catch (cause) {
-			setTransferError(cause instanceof ConvexError ? cause.message : "Could not transfer ownership. Try again.");
+			setTransferError(errorMessage(cause, "Could not transfer ownership. Try again."));
 		} finally { setBusy(false); }
 	}
 	return <div className="mt-7 max-w-2xl space-y-6">
@@ -112,7 +123,7 @@ function SettingsForms({ organizationId, settings }: { readonly organizationId: 
 							</Select>
 						</div>
 						<Button variant="outline" disabled={!target || busy} onClick={() => { setTransferError(null); setConfirmOpen(true); }}>Transfer ownership</Button>
-					</> : <p className="text-sm text-muted-foreground">There are no other eligible organization administrators yet.</p>}
+					</> : <p className="text-sm text-muted-foreground">There are no other organization administrators yet. Make a member an Admin under Members below, then transfer ownership to them.</p>}
 				</> : <p className="text-sm text-muted-foreground">Only the current owner can transfer ownership.</p>}
 			</CardContent>
 		</Card>
@@ -122,5 +133,12 @@ function SettingsForms({ organizationId, settings }: { readonly organizationId: 
 				<DialogFooter><Button variant="outline" disabled={busy} onClick={() => setConfirmOpen(false)}>Cancel</Button><Button disabled={busy || !target} onClick={() => void confirmTransfer()}>{busy ? "Transferring…" : "Confirm transfer"}</Button></DialogFooter>
 			</DialogContent>
 		</Dialog>
+		<OrganizationMembers organizationId={organizationId} />
+		<ActivityLog organizationId={organizationId} />
+		<LeaveOrganization organizationId={organizationId} organizationName={settings.name} isOwner={settings.isOwner} />
+		<DeletedProjects organizationId={organizationId} />
+		{/* Lists only organizations the caller owns; renders nothing when empty. */}
+		<DeletedOrganizations />
+		{settings.isOwner ? <DeleteOrganization organizationId={organizationId} organizationName={settings.name} /> : null}
 	</div>;
 }

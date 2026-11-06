@@ -39,7 +39,7 @@ export function WorkspaceOverview() {
 			</div>
 		</header>
 		{!window ? <p role="alert" className="mt-7 text-muted-foreground">Choose valid dates through today, covering no more than 365 days.</p> : !overview ? <p role="status" className="mt-7 text-muted-foreground">Loading workspace overview…</p> : <div className="mt-7 space-y-6">
-			{overview.admin && <AdminOverview admin={overview.admin} projects={overview.projects} now={now} />}
+			{overview.admin && <AdminOverview organizationId={organization.id} admin={overview.admin} projects={overview.projects} now={now} />}
 			<section aria-labelledby="workspace-projects-heading">
 				<h2 id="workspace-projects-heading" className="font-heading text-xl font-semibold tracking-[-0.025em]">Your projects</h2>
 				<p className="mt-1 text-sm text-muted-foreground">Open an overview or go straight to its feedback inbox.</p>
@@ -50,6 +50,6 @@ export function WorkspaceOverview() {
 				{overview.projects.length === 0 && <p className="mt-4 rounded-xl border bg-background p-5 text-sm text-muted-foreground">No projects are linked to your account in this organization. {organization.isAdmin ? "Create a project to get started." : "Ask an administrator for project access."}</p>}
 			</section>
 		</div>}
-		<footer className="mt-8 border-t pt-5 text-xs text-muted-foreground">Live organization data · Up to 50 projects and 200 feedback items per project.</footer>
+		<footer className="mt-8 border-t pt-5 text-xs text-muted-foreground">Live organization data · Up to 50 projects per organization.</footer>
 	</main>;
 }

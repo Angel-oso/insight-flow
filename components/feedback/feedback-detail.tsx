@@ -5,10 +5,12 @@ import {
 	Clock3,
 	MessageSquareText,
 	Send,
+	Trash2,
 	UserRound,
 } from "lucide-react";
 import { useState } from "react";
 
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +33,7 @@ import type {
 } from "./model";
 import type { Taxonomies } from "@/lib/taxonomy";
 import { taxonomyColorStyle, taxonomyItemFor } from "@/lib/taxonomy";
+import { FeedbackAttachments } from "./feedback-attachments";
 import { FeedbackTag } from "./feedback-meta";
 
 const activityStyles: Record<FeedbackActivity["tone"], string> = {
@@ -44,11 +47,36 @@ type Update = Partial<
 	Pick<FeedbackItem, "category" | "priority" | "status" | "assigneeId">
 >;
 
+/** "Load older" state for a paginated discussion list. */
+export type LoadOlder = {
+	readonly canLoad: boolean;
+	readonly loading: boolean;
+	readonly load: () => void;
+};
+
+function LoadOlderButton({ older, label }: { readonly older?: LoadOlder; readonly label: string }) {
+	if (!older || (!older.canLoad && !older.loading)) return null;
+	return (
+		<Button
+			type="button"
+			variant="ghost"
+			size="sm"
+			className="text-muted-foreground"
+			onClick={older.load}
+			disabled={older.loading}
+		>
+			{older.loading ? "Loading…" : label}
+		</Button>
+	);
+}
+
 export type FeedbackPermissions = {
 	readonly canTriage: boolean;
 	readonly canAssign: boolean;
 	readonly canUpdate: boolean;
 	readonly canComment: boolean;
+	/** project.manage on a non-archived project. */
+	readonly canDelete: boolean;
 };
 
 function DetailMenu<T extends string>({
@@ -130,8 +158,11 @@ export function FeedbackDetail({
 	laneRank,
 	onUpdate,
 	onAddComment,
+	onDelete,
 	loading,
 	pending,
+	olderComments,
+	olderActivities,
 }: {
 	readonly item: FeedbackItem | null;
 	readonly loading: boolean;
@@ -139,6 +170,8 @@ export function FeedbackDetail({
 	readonly assignees: readonly Assignee[];
 	readonly comments: readonly FeedbackComment[];
 	readonly activities: readonly FeedbackActivity[];
+	readonly olderComments?: LoadOlder;
+	readonly olderActivities?: LoadOlder;
 	readonly permissions: FeedbackPermissions;
 	readonly taxonomies: Taxonomies;
 	readonly laneRank: number;
@@ -150,8 +183,11 @@ export function FeedbackDetail({
 		id: FeedbackItem["id"],
 		body: string,
 	) => Promise<boolean>;
+	/** Deletes the item; throws on failure (shown in the dialog). */
+	readonly onDelete: (id: FeedbackItem["id"]) => Promise<void>;
 }) {
 	const [note, setNote] = useState("");
+	const [confirmingDelete, setConfirmingDelete] = useState(false);
 
 	if (!item) {
 		return (
@@ -171,6 +207,8 @@ export function FeedbackDetail({
 	const assignee = assignees.find(
 		(candidate) => candidate.id === item.assigneeId,
 	);
+	// Owners who left the project (or deleted their account) keep closed items.
+	const ownerName = assignee?.name ?? (item.assigneeId ? "Former member" : undefined);
 	const priorityRank = taxonomyItemFor(
 		taxonomies.priorities,
 		item.priority,
@@ -219,17 +257,45 @@ export function FeedbackDetail({
 							{item.title}
 						</h2>
 					</div>
-					{isSevere ? (
-						<CircleAlert
-							className={`mt-1 size-5 shrink-0 ${severeColor ? "" : "text-dashboard-danger"}`}
-							style={
-								severeColor
-									? { color: taxonomyColorStyle(severeColor).color }
-									: undefined
-							}
-						/>
-					) : null}
+					<div className="flex shrink-0 items-center gap-1">
+						{isSevere ? (
+							<CircleAlert
+								className={`mt-1 size-5 shrink-0 ${severeColor ? "" : "text-dashboard-danger"}`}
+								style={
+									severeColor
+										? { color: taxonomyColorStyle(severeColor).color }
+										: undefined
+								}
+							/>
+						) : null}
+						{permissions.canDelete ? (
+							<Button
+								type="button"
+								size="sm"
+								variant="ghost"
+								className="text-destructive hover:text-destructive"
+								onClick={() => setConfirmingDelete(true)}
+							>
+								<Trash2 data-icon="inline-start" />
+								Delete
+							</Button>
+						) : null}
+					</div>
 				</div>
+				<ConfirmDialog
+					open={confirmingDelete}
+					onOpenChange={setConfirmingDelete}
+					title="Delete this feedback?"
+					description={
+						<>
+							<span className="font-medium text-foreground">{item.title}</span> will be
+							removed with its internal notes and activity. This cannot be undone.
+						</>
+					}
+					confirmLabel="Delete feedback"
+					pendingLabel="Deleting…"
+					onConfirm={() => onDelete(item.id)}
+				/>
 				<div className="mt-4 flex flex-wrap gap-2">
 					<FeedbackTag value={item.category} kind="category" taxonomies={taxonomies} />
 					<FeedbackTag value={item.priority} kind="priority" taxonomies={taxonomies} />
@@ -251,6 +317,8 @@ export function FeedbackDetail({
 						{item.description}
 					</p>
 				</section>
+
+				<FeedbackAttachments key={item.id} feedbackId={item.id} />
 
 				<section className="grid gap-4 border-y py-5 sm:grid-cols-2">
 					<DetailField label="Category">
@@ -290,7 +358,7 @@ export function FeedbackDetail({
 						<DetailMenu<Assignee["id"]>
 							label="Owner"
 							value={item.assigneeId}
-							displayValue={assignee?.name}
+							displayValue={ownerName}
 							options={assigneeOptions}
 							disabled={!permissions.canAssign}
 							onValueChange={(assigneeId) => {
@@ -308,10 +376,13 @@ export function FeedbackDetail({
 								Sender
 							</p>
 							<p className="mt-1 font-medium">
-								{item.sender?.name ?? "Anonymous"}
+								{item.sender?.name || "Anonymous"}
 							</p>
 							<p className="text-xs text-muted-foreground">
-								{item.sender?.email ?? "No email shared"}
+								{/* null = hidden: only triagers see submitter emails. */}
+								{item.sender?.email === null
+									? "Email visible to triagers"
+									: item.sender?.email || "No email shared"}
 							</p>
 						</div>
 					</div>
@@ -323,7 +394,7 @@ export function FeedbackDetail({
 							</p>
 							<p className="mt-1 font-medium">{item.updatedAt}</p>
 							<p className="text-xs text-muted-foreground">
-								{assignee ? `Owned by ${assignee.name}` : "No owner assigned"}
+								{ownerName ? `Owned by ${ownerName}` : "No owner assigned"}
 							</p>
 						</div>
 					</div>
@@ -369,6 +440,7 @@ export function FeedbackDetail({
 								No internal context has been added yet.
 							</p>
 						)}
+						<LoadOlderButton older={olderComments} label="Load older notes" />
 					</div>
 					<div className="mt-4 space-y-2">
 						<Textarea
@@ -392,7 +464,7 @@ export function FeedbackDetail({
 
 				<section className="border-t pt-5">
 					<h3 className="font-heading text-sm font-semibold">Activity</h3>
-					<p className="text-xs text-muted-foreground">Latest 100 entries</p>
+					<p className="text-xs text-muted-foreground">Newest first</p>
 					<div className="mt-3 space-y-3">
 						{loading ? (
 							<p role="status" className="text-sm text-muted-foreground">
@@ -417,6 +489,7 @@ export function FeedbackDetail({
 								No activity has been recorded for this item yet.
 							</p>
 						)}
+						<LoadOlderButton older={olderActivities} label="Load older activity" />
 					</div>
 				</section>
 			</div>

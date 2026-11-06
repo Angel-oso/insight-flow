@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Geist, Geist_Mono, Inter, Manrope } from "next/font/google";
 import "./globals.css";
 import { ConvexClientProvider } from "@/components/providers/convex-provider";
@@ -29,7 +30,10 @@ export const metadata: Metadata = {
 	description: "Turn feedback into clear, traceable product decisions.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+	// Set by proxy.ts. Reading it makes every page render per request, which
+	// the nonce-based Content-Security-Policy requires.
+	const nonce = (await headers()).get("x-nonce") ?? undefined;
 	return (
 		<html
 			lang="en"
@@ -47,7 +51,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
 			<body className="flex min-h-full flex-col">
 				<ConvexClientProvider>
 					<NuqsAdapter>
-						<ThemeProvider>{children}</ThemeProvider>
+						<ThemeProvider nonce={nonce}>{children}</ThemeProvider>
 					</NuqsAdapter>
 				</ConvexClientProvider>
 			</body>

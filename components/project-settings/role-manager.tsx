@@ -4,6 +4,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { useState, type FormEvent } from "react";
 
+import { errorMessage } from "@/components/common/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,9 @@ export function RoleManager({ projectSlug, disabled }: { readonly projectSlug: s
 	const [error, setError] = useState<string | null>(null);
 
 	if (!data) return null;
+	const customRoleCount = data.roles.filter((role) => !role.builtIn).length;
+	const atLimit = customRoleCount >= data.customRoleLimit;
+	const formDisabled = disabled || pending || atLimit;
 
 	function togglePermission(capability: Capability) {
 		setPermissionKeys((current) => current.includes(capability)
@@ -57,7 +61,7 @@ export function RoleManager({ projectSlug, disabled }: { readonly projectSlug: s
 			setName("");
 			setPermissionKeys(["feedback.update", "feedback.comment"]);
 		} catch (cause) {
-			setError(cause instanceof Error ? cause.message : "Could not create this role.");
+			setError(errorMessage(cause, "Could not create this role."));
 		} finally {
 			setPending(false);
 		}
@@ -70,7 +74,7 @@ export function RoleManager({ projectSlug, disabled }: { readonly projectSlug: s
 		try {
 			await deleteRole({ projectSlug, roleId });
 		} catch (cause) {
-			setError(cause instanceof Error ? cause.message : "Could not delete this role.");
+			setError(errorMessage(cause, "Could not delete this role."));
 		} finally {
 			setPending(false);
 		}
@@ -81,7 +85,7 @@ export function RoleManager({ projectSlug, disabled }: { readonly projectSlug: s
 			<CardHeader className="border-b px-5 py-5 sm:px-6">
 				<CardTitle>Roles</CardTitle>
 				<CardDescription>
-					Create project-specific roles. Deleting one moves its members and pending invitations to Member.
+					Create project-specific roles (up to {data.customRoleLimit}). Deleting one moves its members and pending invitations to Member.
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-5 px-5 py-5 sm:px-6">
@@ -105,7 +109,7 @@ export function RoleManager({ projectSlug, disabled }: { readonly projectSlug: s
 				<form className="space-y-4 border-t pt-5" onSubmit={(event) => void handleCreate(event)}>
 					<label className="grid gap-2 text-sm font-medium" htmlFor="role-name">
 						New role name
-						<Input id="role-name" value={name} maxLength={40} onChange={(event) => setName(event.target.value)} disabled={disabled || pending} placeholder="e.g. Support lead" />
+						<Input id="role-name" value={name} maxLength={40} onChange={(event) => setName(event.target.value)} disabled={formDisabled} placeholder="e.g. Support lead" />
 					</label>
 					<fieldset className="grid gap-2 sm:grid-cols-2">
 						<legend className="text-sm font-medium">Permissions</legend>
@@ -114,14 +118,19 @@ export function RoleManager({ projectSlug, disabled }: { readonly projectSlug: s
 							const isRequired = required.includes(capability as (typeof required)[number]);
 							return (
 								<label key={capability} className="flex items-center gap-2 text-sm text-muted-foreground">
-									<input type="checkbox" checked={isRequired || permissionKeys.includes(capability)} disabled={disabled || pending || isRequired} onChange={() => togglePermission(capability)} />
+									<input type="checkbox" checked={isRequired || permissionKeys.includes(capability)} disabled={formDisabled || isRequired} onChange={() => togglePermission(capability)} />
 									{labels[capability]}{isRequired ? " (required)" : ""}
 								</label>
 							);
 						})}
 					</fieldset>
+					<p className="text-xs text-muted-foreground" aria-live="polite">
+						{atLimit
+							? `This project has reached the limit of ${data.customRoleLimit} custom roles. Delete a role you no longer use to create another.`
+							: `${customRoleCount} of ${data.customRoleLimit} custom roles used.`}
+					</p>
 					{error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-					<Button type="submit" disabled={disabled || pending || name.trim().length < 2}>
+					<Button type="submit" disabled={formDisabled || name.trim().length < 2}>
 						<Plus data-icon="inline-start" /> {pending ? "Saving…" : "Create role"}
 					</Button>
 				</form>

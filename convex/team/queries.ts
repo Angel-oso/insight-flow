@@ -1,15 +1,15 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { query } from "../_generated/server";
-import type { Doc, Id } from "../_generated/dataModel";
+import type { Id } from "../_generated/dataModel";
 import { hasCapability } from "../../lib/auth/permissions";
 import { resolveProjectAccess } from "../access/roles";
-import { listProjectFeedback, requireCapability, requireProject } from "../feedback/access";
-import { getFinalStatuses, getPriorityRanks, getTaxonomies } from "../taxonomies/lib";
+import { PROJECT_MEMBER_LIMIT, requireCapability, requireProject } from "../feedback/access";
+import { assigneeWorkload, projectBacklog } from "../feedback/aggregates";
+import { getFinalStatuses, getTaxonomies } from "../taxonomies/lib";
 import schema from "../schema";
 
-function isOpen(item: Doc<"feedback">, finals: ReadonlySet<string>) {
-	return !finals.has(item.status);
-}
+/** Project links read to count one member's projects in this org. */
+const PROJECT_SCOPE_LIMIT = 100;
 
 export const get = query({
 	args: { projectSlug: v.string() },
@@ -33,11 +33,12 @@ export const get = query({
 				id: v.id("users"),
 				roleId: v.id("roles"),
 				name: v.string(),
-				email: v.string(),
+				// Contact details are for people who manage the team; other
+				// members get null (names are enough to collaborate).
+				email: v.union(v.string(), v.null()),
 				role: schema.tables.roles.validator.fields.name,
 				// Per-person workload is null unless the caller can assign work
 				// (PRODUCT.md: members never get team-performance comparisons).
-				projectCount: v.union(v.number(), v.null()),
 				openAssigned: v.union(v.number(), v.null()),
 				criticalAssigned: v.union(v.number(), v.null()),
 				lastActivityAt: v.union(v.number(), v.null()),
@@ -49,80 +50,66 @@ export const get = query({
 		const { project, access } = await requireProject(ctx, projectSlug);
 		requireCapability(access.permissions, "team.view");
 		const showsWorkload = hasCapability(access.permissions, "feedback.assign");
+		const showsEmail = hasCapability(access.permissions, "team.manage");
 		const projectId: Id<"projects"> = project._id;
 
 		const links = await ctx.db
 			.query("projectMembers")
 			.withIndex("by_projectId_userId", (q) => q.eq("projectId", projectId))
-			.take(51);
-		if (links.length > 50)
-			throw new Error("This workspace supports up to 50 project members.");
+			.take(PROJECT_MEMBER_LIMIT + 1);
+		if (links.length > PROJECT_MEMBER_LIMIT)
+			throw new ConvexError(`This workspace supports up to ${PROJECT_MEMBER_LIMIT} project members.`);
 
-		// Project-level backlog for the unassigned count (bounded, shared cap).
-		const items = await listProjectFeedback(ctx, projectId);
+		// Project backlog from aggregates: no feedback rows are read.
+		const taxonomies = await getTaxonomies(ctx, project.organizationId);
 		const finals = await getFinalStatuses(ctx, project.organizationId);
-		const priorityRank = await getPriorityRanks(ctx, project.organizationId);
-		const rankOf = (priority: string) => priorityRank.get(priority) ?? 0;
-		let unassigned = 0;
-		let critical = 0;
+		const backlog = await projectBacklog(ctx, projectId, taxonomies, finals);
 		// Critical lane = highest rank present in the open backlog.
-		let laneRank = -1;
-		for (const item of items) {
-			if (!isOpen(item, finals)) continue;
-			laneRank = Math.max(laneRank, rankOf(item.priority));
-		}
-		for (const item of items) {
-			if (!isOpen(item, finals)) continue;
-			if (item.assigneeId === null) unassigned += 1;
-			if (rankOf(item.priority) === laneRank) critical += 1;
-		}
+		const laneRank = backlog.laneRank;
+		const critical = laneRank < 0 ? 0 : backlog.openAtRank(laneRank);
 
-		const members = (
+		const resolved = (
 			await Promise.all(links.map(async (link) => {
-			const member = await resolveProjectAccess(ctx, link.userId, projectId);
-			if (!member) return null;
+				const member = await resolveProjectAccess(ctx, link.userId, projectId);
+				return member ? { link, member } : null;
+			}))
+		).filter((row) => row !== null);
+		// Two passes keep aggregate reads linear in the team size: open counts
+		// for everyone, then the critical-lane split only for people (and the
+		// unassigned queue) who actually hold open work.
+		const assignees = [null, ...resolved.map(({ member }) => member.user._id)];
+		const openWorkload = await assigneeWorkload(ctx, projectId, assignees, taxonomies, finals);
+		const busy = laneRank < 0
+			? []
+			: assignees.filter((assignee) => (openWorkload.get(assignee)?.open ?? 0) > 0);
+		const laneWorkload = busy.length
+			? await assigneeWorkload(ctx, projectId, busy, taxonomies, finals, [new Set([laneRank])])
+			: new Map<Id<"users"> | null, { open: number; ranked: number[] }>();
+		const unassigned = openWorkload.get(null)?.open ?? 0;
+
+		// Per-person project scope is loaded lazily (memberProjectCount): reading
+		// every member's project links here multiplied reads by the team size.
+		const members = await Promise.all(resolved.map(async ({ link, member }) => {
 			const user = member.user;
-			const [assigned, scope] = await Promise.all([
-				ctx.db
+			const [latest] = await ctx.db
 				.query("feedback")
-				.withIndex("by_projectId_assigneeId", (q) =>
+				.withIndex("by_projectId_assigneeId_updatedAt", (q) =>
 					q.eq("projectId", projectId).eq("assigneeId", user._id),
 				)
-				.take(201),
-				ctx.db
-					.query("projectMembers")
-					.withIndex("by_userId", (q) => q.eq("userId", user._id))
-					.take(51),
-			]);
-			let openAssigned = 0;
-			let criticalAssigned = 0;
-			let lastActivityAt: number | null = null;
-			for (const item of assigned) {
-				if (item.updatedAt > (lastActivityAt ?? 0)) lastActivityAt = item.updatedAt;
-				if (!isOpen(item, finals)) continue;
-				openAssigned += 1;
-				if (rankOf(item.priority) === laneRank) criticalAssigned += 1;
-			}
-			const linkedProjects = await Promise.all(
-				scope.map((projectLink) => ctx.db.get("projects", projectLink.projectId)),
-			);
-			const projectCount = linkedProjects.filter(
-				(linkedProject) => linkedProject?.organizationId === project.organizationId,
-			).length;
+				.order("desc")
+				.take(1);
 			return {
 				id: user._id,
 				roleId: member.roleId,
 				name: user.name ?? "Unknown member",
-				email: user.email ?? "",
+				email: showsEmail ? (user.email ?? null) : null,
 				role: member.role,
-				projectCount,
-				openAssigned,
-				criticalAssigned,
-				lastActivityAt,
+				openAssigned: openWorkload.get(user._id)?.open ?? 0,
+				criticalAssigned: laneWorkload.get(user._id)?.ranked[0] ?? 0,
+				lastActivityAt: latest?.updatedAt ?? null,
 				joinedAt: link.joinedAt,
 			};
-			}),
-		)).filter((member) => member !== null);
+		}));
 		// Most loaded first: where work is concentrated.
 		members.sort(
 			(a, b) =>
@@ -135,7 +122,6 @@ export const get = query({
 			: members
 					.map((member) => ({
 						...member,
-						projectCount: null,
 						openAssigned: null,
 						criticalAssigned: null,
 						lastActivityAt: null,
@@ -144,8 +130,7 @@ export const get = query({
 
 		const coordinatorCount = members.filter((member) => member.role !== "member").length;
 		const openAssigned = members.reduce((total, member) => total + member.openAssigned, 0);
-		const { priorities } = await getTaxonomies(ctx, project.organizationId);
-		const lanePriority = priorities.find((entry) => entry.rank === laneRank);
+		const lanePriority = taxonomies.priorities.find((entry) => entry.rank === laneRank);
 		const criticalLabel = lanePriority?.label ?? null;
 		const criticalColor = lanePriority?.color ?? null;
 
@@ -163,5 +148,40 @@ export const get = query({
 			showsWorkload,
 			members: visibleMembers,
 		};
+	},
+});
+
+
+/**
+ * How many live projects of this organization one teammate belongs to.
+ * Loaded per row so the roster query stays linear in the team size. Null
+ * for callers who do not see workload (same rule as the roster) or when
+ * the person is not on this project's team.
+ */
+export const memberProjectCount = query({
+	args: { projectSlug: v.string(), memberId: v.id("users") },
+	returns: v.union(v.object({ count: v.number(), capped: v.boolean() }), v.null()),
+	handler: async (ctx, { projectSlug, memberId }) => {
+		const { project, access } = await requireProject(ctx, projectSlug);
+		requireCapability(access.permissions, "team.view");
+		if (!hasCapability(access.permissions, "feedback.assign")) return null;
+		const link = await ctx.db
+			.query("projectMembers")
+			.withIndex("by_projectId_userId", (q) => q.eq("projectId", project._id).eq("userId", memberId))
+			.unique();
+		if (!link) return null;
+		const scope = await ctx.db
+			.query("projectMembers")
+			.withIndex("by_userId", (q) => q.eq("userId", memberId))
+			.take(PROJECT_SCOPE_LIMIT + 1);
+		const linkedProjects = await Promise.all(
+			scope.slice(0, PROJECT_SCOPE_LIMIT).map((row) => ctx.db.get("projects", row.projectId)),
+		);
+		const count = linkedProjects.filter(
+			(linked) =>
+				linked?.organizationId === project.organizationId &&
+				linked.deletionRequestedAt === undefined,
+		).length;
+		return { count, capped: scope.length > PROJECT_SCOPE_LIMIT };
 	},
 });

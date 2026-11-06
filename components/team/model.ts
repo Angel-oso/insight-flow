@@ -10,10 +10,10 @@ export type TeamMember = {
 	readonly id: Id<"users">;
 	readonly roleId: Id<"roles">;
 	readonly name: string;
-	readonly email: string;
+	/** Null unless the viewer can manage the team. */
+	readonly email: string | null;
 	readonly initials: string;
 	readonly role: MemberRole;
-	readonly projectCount: number | null;
 	readonly openAssigned: number | null;
 	readonly criticalAssigned: number | null;
 	readonly lastActivity: string;
@@ -65,7 +65,6 @@ export function presentTeam(data: TeamQueryData, now: number): PresentedTeam {
 			email: member.email,
 			initials: initials(member.name),
 			role: member.role,
-			projectCount: member.projectCount,
 			openAssigned: member.openAssigned,
 			criticalAssigned: member.criticalAssigned,
 			lastActivity: !data.showsWorkload

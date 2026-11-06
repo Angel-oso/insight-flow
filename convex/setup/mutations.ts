@@ -1,25 +1,22 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
+import { getSessionUserId } from "../feedback/access";
 import { ConvexError, v } from "convex/values";
 
+import { logAudit } from "../audit/log";
 import { internal } from "../_generated/api";
 import { mutation } from "../_generated/server";
+import { slugify, uniqueSlug } from "../lib/slugs";
+import { enforceRateLimit, MAX_OWNED_ORGANIZATIONS } from "../rateLimits";
 import { ensureTaxonomies, getTaxonomies } from "../taxonomies/lib";
 
-function slugFromName(name: string) {
-	return name
-		.normalize("NFD")
-		.replace(/[\u0300-\u036f]/g, "")
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/(^-|-$)/g, "");
-}
+// Upper bound on memberships scanned when counting owned organizations.
+const MEMBERSHIP_SCAN_LIMIT = 200;
 
 /** Creates a workspace the caller owns, with an initial admin project. */
 export const createWorkspace = mutation({
 	args: { name: v.string(), projectName: v.string() },
 	returns: v.object({ projectSlug: v.string(), workspaceName: v.string() }),
 	handler: async (ctx, { name: rawName, projectName: rawProjectName }) => {
-		const userId = await getAuthUserId(ctx);
+		const userId = await getSessionUserId(ctx);
 		if (!userId) throw new ConvexError("Sign in to create a workspace.");
 		const user = await ctx.db.get("users", userId);
 		if (!user) throw new ConvexError("Account not found.");
@@ -32,26 +29,33 @@ export const createWorkspace = mutation({
 		if (!projectName || projectName.length > 80) {
 			throw new ConvexError("Give the first project a name between 1 and 80 characters.");
 		}
-		const projectSlug = slugFromName(projectName);
-		if (!projectSlug) throw new ConvexError("Give the first project a name with letters or numbers.");
-		const slug = slugFromName(name);
-		if (!slug) {
+		if (!slugify(projectName)) throw new ConvexError("Give the first project a name with letters or numbers.");
+		if (!slugify(name)) {
 			throw new ConvexError("Give the workspace a name with letters or numbers.");
 		}
 
-		const [existingOrganization, existingProject] = await Promise.all([
-			ctx.db
-				.query("organizations")
-				.withIndex("by_slug", (q) => q.eq("slug", slug))
-				.unique(),
-			ctx.db
-				.query("projects")
-				.withIndex("by_slug", (q) => q.eq("slug", projectSlug))
-				.unique(),
-		]);
-		if (existingOrganization || existingProject) {
-			throw new ConvexError("That workspace name is already in use.");
+		const memberships = await ctx.db
+			.query("organizationMembers")
+			.withIndex("by_userId", (q) => q.eq("userId", userId))
+			.take(MEMBERSHIP_SCAN_LIMIT);
+		const organizations = await Promise.all(
+			memberships.map((membership) => ctx.db.get("organizations", membership.organizationId)),
+		);
+		// Organizations being deleted no longer count against the limit.
+		const owned = organizations.filter(
+			(organization) => organization?.ownerId === userId && organization.deletionRequestedAt === undefined,
+		).length;
+		if (owned >= MAX_OWNED_ORGANIZATIONS) {
+			throw new ConvexError(
+				`You can own up to ${MAX_OWNED_ORGANIZATIONS} workspaces. Transfer ownership of one to create another.`,
+			);
 		}
+		await enforceRateLimit(ctx, "createWorkspace", userId);
+
+		// Slugs are global; collisions get a random suffix instead of an error
+		// so other tenants' names are never revealed or blocked.
+		const slug = (await uniqueSlug(ctx, "organizations", name))!;
+		const projectSlug = (await uniqueSlug(ctx, "projects", projectName))!;
 
 		await ctx.runMutation(internal.setup.admin.seedAccessCatalog, {});
 		const adminRole = await ctx.db
@@ -79,7 +83,9 @@ export const createWorkspace = mutation({
 			slug: projectSlug,
 			description: "The first project in this workspace.",
 			status: "Active",
-			inboxEnabled: true,
+			// The public form starts closed: slugs are guessable, so admins
+			// open it on purpose from project settings.
+			inboxEnabled: false,
 			defaultPriority: defaultPriority.value,
 			criticalAlerts: false,
 			weeklyDigest: false,
@@ -100,6 +106,13 @@ export const createWorkspace = mutation({
 		await ctx.db.insert("activities", {
 			projectId, actorId: userId, type: "project_created",
 			message: `Created project ${projectName}`, createdAt: now,
+		});
+		await logAudit(ctx, {
+			organizationId,
+			projectId,
+			actorId: userId,
+			action: "project.created",
+			summary: `Created the workspace with project ${projectName}`,
 		});
 		return { projectSlug, workspaceName: name };
 	},

@@ -5,6 +5,7 @@ import { hasCapability } from "@/lib/auth/permissions";
 import { api } from "@/convex/_generated/api";
 import type { Project } from "@/lib/projects";
 import { ProjectSettingsWorkspace } from "./project-settings-workspace";
+import { ProjectDangerZone } from "./danger-zone";
 import { RoleManager } from "./role-manager";
 import { SettingsHeader } from "./settings-header";
 
@@ -29,6 +30,8 @@ export function ProjectSettings({
 				project={project}
 			/>
 			{canManageRoles ? <RoleManager projectSlug={project.slug} disabled={!canManage} /> : null}
+			{/* Deletion is decided server-side by organization admin rights. */}
+			{canManageRoles ? <ProjectDangerZone project={project} /> : null}
 		</div>
 	);
 }
