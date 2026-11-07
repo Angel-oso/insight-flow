@@ -1,54 +1,187 @@
+<div align="center">
+
+<a href="https://insight-flow-theta-beryl.vercel.app/">
+  <img src="public/logo.svg" alt="InsightFlow logo" width="88" height="88">
+</a>
+
 # InsightFlow
 
-**Turn scattered feedback into clear, traceable product decisions.**
+### Turn scattered feedback into clear, traceable product decisions.
 
-InsightFlow is a multi-tenant web app where teams collect feedback through a
-public link, organize it by project, category, status, and priority, assign
-owners, and see each project's health in a dashboard built for deciding where
-to intervene.
+Collect feedback through a public link, give every item an owner and a status,<br>
+and see at a glance **which projects need your attention**.
 
----
+<br>
 
-## Why it exists
+<a href="https://insight-flow-theta-beryl.vercel.app/"><img src="https://img.shields.io/badge/%E2%96%B6%EF%B8%8F%20%20Try%20the%20live%20demo-6d5dfc?style=for-the-badge" alt="Try the live demo" height="40"></a>
 
-Feedback usually lives scattered across support conversations, forms, email,
-calls, spreadsheets, and informal messages. That produces four practical
-failures:
+<br><br>
 
-- Valuable requests get lost or duplicated.
-- Important feedback can't be told apart from isolated opinions.
-- Nobody sees which projects are accumulating risk or backlog.
-- Nobody can explain why something was prioritized, completed, or discarded.
+[![CI](https://github.com/Angel-oso/insight-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/Angel-oso/insight-flow/actions/workflows/ci.yml)
+![Next.js](https://img.shields.io/badge/Next.js_16-000000?logo=nextdotjs&logoColor=white)
+![React](https://img.shields.io/badge/React_19-149eca?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178c6?logo=typescript&logoColor=white)
+![Convex](https://img.shields.io/badge/Convex-ee342f?logo=convex&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS_4-06b6d4?logo=tailwindcss&logoColor=white)
+![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000?logo=vercel&logoColor=white)
 
-InsightFlow provides **one workflow**: collect via a public link, organize by
-project, assign owners, move each item through a clear lifecycle, and see
-volume, urgency, and health in a dashboard. Deliberately **simple before
-smart**: manual classification and prioritization; no AI, automations, or
-scoring.
+<br>
 
----
+<a href="https://insight-flow-theta-beryl.vercel.app/">
+  <img src="docs/screenshots/landing.png" alt="InsightFlow landing page with a preview of the feedback inbox" width="900">
+</a>
 
-## The workflow, end to end
+</div>
 
-1. **Sign up** (email/password or Google), name your organization and its
-   first project. You become the organization's owner and administrator.
-2. **Share the public link** from *Project settings → Feedback intake*
-   (`/f/<project>`). Anyone can submit feedback without an account.
-3. **Triage in the inbox**: search and filter, set category and priority,
-   assign an owner, move the status, and leave internal notes. Feedback that
-   arrives by phone or email can be logged manually by triagers.
-4. **Decide on the overviews**: each project shows its received vs. resolved
-   trend, backlog, items needing intervention, and health; members see their
-   own queue first, managers see workload by person. Administrators get an
-   organization overview with every project's health. Ranges: 7, 30, 90 days,
-   or custom dates.
-5. **Grow the team**: invite people with a one-time, expiring link and a
-   project role, change roles, or remove members (their open work returns to
-   the unassigned queue).
+<br>
 
----
+## ✨ Why InsightFlow?
 
-## Routes
+Feedback usually lives everywhere: support chats, forms, email, calls,
+spreadsheets. So valuable requests get lost, nobody can tell a pattern from a
+one-off opinion, and nobody remembers *why* something was prioritized.
+
+InsightFlow gives teams **one simple workflow**:
+
+```mermaid
+flowchart LR
+    A["🌐 Public link<br/><code>/f/your-project</code>"] --> B["📥 Inbox"]
+    B --> C["🏷️ Triage<br/>category · priority"]
+    C --> D["👤 Assign an owner"]
+    D --> E["🔄 Move through statuses"]
+    E --> F["📊 Dashboards<br/>health · backlog · trends"]
+```
+
+Deliberately **simple before smart**: manual classification and
+prioritization, with no AI magic and no black-box scoring.
+
+## 🚀 Features
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### 🌐 Public intake
+Share one link and anyone can send feedback, **no account needed**.
+Protected by Cloudflare Turnstile, a honeypot and rate limits, with optional
+file attachments.
+
+</td>
+<td width="50%" valign="top">
+
+### 📥 Smart inbox
+Search, filter by status, priority, category, date or "assigned to me".
+Server-side pagination, shareable deep links, internal notes and a full
+activity trail.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 📊 Decision dashboards
+Received vs. resolved trends, backlog composition, a **"Needs intervention"**
+queue, per-person workload and an organization-wide health table. Pick a
+range of 7, 30 or 90 days, or custom dates.
+
+</td>
+<td valign="top">
+
+### 👥 Teams & roles
+Multi-tenant organizations and projects. Built-in **Admin**, **Manager** and
+**Member** roles plus custom per-project roles, all enforced on the server.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### ✉️ Invitations & notifications
+Expiring, one-time invitation links or email invites. Critical alerts and a
+weekly digest, with one-click unsubscribe.
+
+</td>
+<td valign="top">
+
+### 🎨 Polished UX
+Real-time updates everywhere, light and dark themes, a fully responsive
+layout, keyboard-friendly and accessible components.
+
+</td>
+</tr>
+</table>
+
+## 🔐 Security first
+
+- **Every check runs on the server.** Identity comes from the auth session,
+  never from arguments, and each read or write verifies project membership
+  and role capabilities.
+- **Sign-in with Google or email + password**, with email verification codes,
+  password reset, and a captcha after failed attempts.
+- **Abuse protection**: Cloudflare Turnstile and rate limits on public and
+  auth endpoints.
+- **Hardened headers**: nonce-based Content Security Policy, HSTS and frame
+  protection.
+- **Self-serve data deletion** for feedback, projects, organizations and
+  accounts.
+
+## 🛠️ Tech stack
+
+| Layer | Technology |
+| --- | --- |
+| **Frontend** | Next.js 16 (App Router) · React 19 · TypeScript |
+| **Backend** | Convex: database, server functions, realtime, file storage, crons |
+| **Auth** | Convex Auth (Google OAuth + email/password) |
+| **UI** | Tailwind CSS 4 · shadcn/ui · Base UI · Lucide icons |
+| **Charts** | TanStack Charts |
+| **Email** | Brevo transactional API |
+| **Monitoring** | Sentry |
+| **Testing** | Vitest + convex-test, with backend suites covering authorization, intake, auth and email |
+| **Hosting** | Vercel (frontend) + Convex Cloud (backend) |
+
+## 🏁 Getting started
+
+> **Just want to look around?** Open the
+> **[live demo](https://insight-flow-theta-beryl.vercel.app/)**, create an
+> account, and send yourself feedback through your project's public link.
+
+To run it locally you need **Node 20+** and **pnpm**.
+
+```bash
+git clone https://github.com/Angel-oso/insight-flow.git
+cd insight-flow
+pnpm install
+cp .env.example .env.local
+```
+
+Run the backend and the frontend in two terminals:
+
+```bash
+npx convex dev   # Terminal 1: Convex backend (watch + codegen)
+pnpm dev         # Terminal 2: Next.js at http://localhost:3000
+```
+
+Set the auth variables once on your Convex deployment: `JWT_PRIVATE_KEY`,
+`JWKS`, `SITE_URL`, and optionally `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`.
+`.env.example` explains each one.
+
+| Command | What it does |
+| --- | --- |
+| `pnpm dev` | Next.js dev server |
+| `pnpm build` / `pnpm start` | Production build and server |
+| `pnpm test` | Backend test suites |
+| `pnpm typecheck` | Typecheck the app and the Convex backend |
+| `pnpm lint` | ESLint |
+
+**Deploying your own copy?** The full runbook (Vercel + Convex, env vars,
+OAuth, email, security checklist) lives in **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
+
+## 📚 Under the hood
+
+<details>
+<summary><b>🗺️ Routes</b></summary>
+
+<br>
 
 | Route | Audience | What it does |
 | --- | --- | --- |
@@ -56,7 +189,6 @@ scoring.
 | `/login`, `/signup` | Public | Authentication |
 | `/f/[projectSlug]` | Public | Feedback form and confirmation |
 | `/invitations/[token]` | Signed in | Accept a project invitation |
-| `/home`, `/feedback`, `/team` | Signed in | Open your first project's section |
 | `/workspace` | Members | Projects list; organization overview for admins |
 | `/workspace/settings` | Admins | Rename the organization, transfer ownership |
 | `/projects/[slug]/home` | Members | Decision-ready project overview |
@@ -64,86 +196,12 @@ scoring.
 | `/projects/[slug]/team` | Members | Workload, roles, invitations |
 | `/projects/[slug]/settings` | Members | Identity, intake link, taxonomies, roles, archive |
 
-Every page reads live data from the Convex backend; nothing is mocked. On
-mobile the app uses a compact header that opens the navigation as a side sheet.
+</details>
 
-### Organization workspace (`/workspace`)
+<details>
+<summary><b>🧱 Architecture</b></summary>
 
-Every member sees the projects they can open, with status and open and
-critical counts. Administrators also get the organization metrics (received,
-open, critical, resolution rate), a project health table ranked by open
-feedback (cards on mobile), and recent activity across projects, including
-project creation. Quick actions create a project or open the inbox.
-
-### Project overview (`home`)
-
-Intervention brief, metric band (received, open, critical, resolution),
-feedback movement (received vs. resolved per day), backlog composition, a
-"Needs intervention" queue with deep links, and recent activity. The view is
-role-aware: **My work** lists the caller's assigned items by priority and
-age, urgent items, items with new comments from others, and completed work in
-the range; members see it first and never see team comparisons, while
-managers and admins also get **Workload by team member**. The range (7, 30,
-90 days, or a custom from/to of up to 365 days) lives in the URL.
-
-### Inbox (`feedback`)
-
-Search, filters by status/priority/category/date and "Assigned to me",
-pagination, and expandable rows. The selected item lives in the URL
-(`?feedback=<id>`), so it's shareable and works with back/forward. Every
-triage change and note writes an activity entry.
-
-### Public intake (`/f/[slug]`)
-
-Title, description, category, and optional name and email. Validated on the
-server; closed when the project is paused, archived, or its intake is turned
-off. New items start in the first status with the project's default priority,
-unassigned. A hidden honeypot field absorbs simple bots. There is no
-per-project item cap: the inbox paginates on the server and every count comes
-from aggregates, so a project keeps working with tens of thousands of items.
-
-### Scale: pagination and aggregates
-
-- **Inbox** (`feedback/queries:list`): server-side pagination with
-  `usePaginatedQuery`. Status, priority, category, assignee (including
-  "assigned to me") and the received date range use indexes; title search uses
-  the `search_title` search index.
-- **Metrics** (project overview, team, organization overview): counts come
-  from `@convex-dev/aggregate` instances namespaced per project
-  (`convex/feedback/aggregates.ts`), keyed by raw status/priority values, so
-  editing a status's "final" flag or a priority's rank needs no data rewrite.
-- **Single write path**: every feedback insert/patch/delete goes through
-  `convex/feedback/store.ts`, which updates the row and every aggregate in the
-  same transaction. After deploying to an environment with existing data, run
-  the idempotent backfill once:
-  `npx convex run --prod feedback/store:backfillAggregates '{}'`.
-
-### Organization taxonomies
-
-Statuses, categories, and priorities live in the `taxonomies` table, one set
-per organization. Administrators rename options, pick colors, set ranks, mark
-final statuses, and add or remove options (removal is blocked while the
-organization's feedback still uses a value). Business rules derive from the
-data: final statuses close the backlog, the top priority rank is the critical
-lane, and the lowest status rank is where new feedback lands.
-
----
-
-## Stack
-
-| Layer | Technology |
-| --- | --- |
-| Frontend | Next.js 16 (App Router), React 19, TypeScript |
-| Backend | Convex (database, queries, mutations, realtime) |
-| Auth | Convex Auth (Google OAuth + email/password) |
-| UI | Tailwind CSS 4, shadcn/ui, Base UI, Lucide |
-| Charts | TanStack Charts |
-| URL state | nuqs |
-| Tests | Vitest + convex-test |
-
----
-
-## Architecture
+<br>
 
 ```text
 app/
@@ -154,45 +212,33 @@ app/
 ├── workspace/                     → organization overview + settings
 └── (app)/projects/[projectSlug]/  → home · feedback · team · settings
 
-components/
-├── landing/  intake/  invitations/
-├── workspace/        → organization overview, projects, settings
-├── home/dashboard/   → overview panels + presentation model
-├── feedback/         → inbox, detail, filters, manual logging
-├── team/             → roster, workload, invitations
-├── project-settings/ → settings, public link, taxonomies, roles
-└── projects/         → access gate + current-project context
-
 convex/
 ├── schema.ts         → tables and indexes
-├── access/roles.ts   → organization and project role resolution
-├── feedback/         → access helpers, queries, mutations, shared creation
-├── intake/public.ts  → anonymous form read + submission
-├── dashboard/        → overview aggregates
-├── organizations/    → organization overview, rename, ownership
-├── projects/         → list, create, settings, roles, restore
-├── team/             → roster, role changes, member removal
-├── invitations/      → expiring one-time invitation links
-├── taxonomies/       → per-organization display metadata
-├── setup/            → workspace creation, access catalog
-└── users/            → profile and account credentials
+├── access/           → organization and project role resolution
+├── feedback/         → queries, mutations, aggregates, single write path
+├── intake/           → anonymous form read + submission
+├── dashboard/        → overview metrics
+├── organizations/    → overview, rename, ownership, deletion
+├── projects/         → create, settings, roles, archive, deletion
+├── team/  invitations/  taxonomies/  users/  attachments/
+└── notifications/  email/  monitoring/
 ```
 
-**Backend conventions:**
+**Backend conventions**
 
-- Identity always comes from the auth session (`getAuthUserId`), never from
-  arguments. Every read and write checks project membership and the role's
-  capabilities on the server.
-- Index-driven reads (`withIndex`), bounded collections (`take(n)`) with
-  explicit errors instead of silent truncation.
-- Time-windowed queries (overview, inbox ages) take `now` as an argument
-  from the client instead of reading the clock.
+- Identity always comes from the auth session (`getAuthUserId`).
+- Index-driven reads (`withIndex`) and bounded collections (`take(n)`).
 - `args` + `returns` validators on every function.
-- No stored counters: metrics, age, and relative times are derived.
+- Metrics come from `@convex-dev/aggregate`, so counts stay fast with tens of
+  thousands of items. Every feedback write goes through
+  `convex/feedback/store.ts`, which keeps the aggregates in sync.
 
----
+</details>
 
-## Data model
+<details>
+<summary><b>🗃️ Data model and business rules</b></summary>
+
+<br>
 
 ```text
 organizations ─┬─ organizationMembers ── users
@@ -202,119 +248,58 @@ organizations ─┬─ organizationMembers ── users
                │                         └─ activities
                └─ taxonomies (status · category · priority)
 
-roles ── permissions   (built-in admin/manager/member + per-project custom roles)
+roles ── permissions   (built-in admin/manager/member + custom per-project roles)
 ```
 
-**Transparent business rules** (same in backend and UI):
+The rules are the same in the backend and the UI:
 
-- **Open**: any status not marked final (by default `Completed`, `Discarded`).
-- **Stale**: open with no activity for ≥ 7 days.
+- **Open**: any status not marked final.
+- **Stale**: open with no activity for 7 days or more.
 - **Needs attention**: open and top priority, unassigned, or stale.
-- **Resolved**: any final status (by default `Completed` and `Discarded`);
-  resolution rate = resolved / total.
-- **Health** (one rule for project and organization views): `At risk` (≥ 1
-  open item at the top priority, or ≥ 20 open items) · `Needs attention` (any
-  open backlog) · `Healthy` (nothing open).
-- **Archived projects** are read-only, including team, roles, and
-  invitations, until an administrator restores them.
-- **Deletion** is self-serve and irreversible (see *Data deletion* below).
+- **Health**:
+  - **At risk**: 1 or more open items at the top priority, or 20 or more open
+    items.
+  - **Needs attention**: any open backlog.
+  - **Healthy**: nothing open.
+- **Archived projects** are read-only until an admin restores them.
 
-### Data deletion
+</details>
 
-| What | Who | Notes |
-| --- | --- | --- |
-| Feedback item(s) | `project.manage` (project admins) | One item from its detail panel, or up to 50 selected items (spam). Removes comments and activity too. Not on archived projects. |
-| Invitation link | `team.manage` | Revoke pending links from the team page. Expired links are purged daily 30 days after expiry. |
-| Organization member | Organization admins | Removes them from every project in the organization; open work returns to Unassigned. The owner cannot be removed; one admin always stays. Non-owners can also leave. |
-| Project | Organization admins | Typed-name confirmation. Hidden everywhere at once (including the public form), then purged in background batches. |
-| Organization | Owner | Typed-name confirmation. Cascades through every project, memberships and taxonomies. |
-| Own account | Anyone signed in | Typed email confirmation. Refused while you own an organization. Removes memberships, created invitation links, sign-in data and sessions; notes stay as "Former member". |
+<details>
+<summary><b>🛡️ Roles and permissions</b></summary>
 
-Large deletions mark the record first (`deletionRequestedAt`, so every
-lookup ignores it immediately) and then run bounded internal mutations that
-reschedule themselves until done (`convex/projects/deletion.ts`,
-`convex/organizations/deletion.ts`, `convex/users/deletion.ts`). Feedback
-rows are always deleted through `convex/feedback/store.ts`, so the
-aggregates drop with them.
-
----
-
-## Roles and permissions
+<br>
 
 | Role | Can |
 | --- | --- |
-| Owner | An admin who can also transfer organization ownership and delete the organization |
-| Admin | Everything: triage, assign, log, delete feedback, manage project, team, roles, taxonomies, organization members; delete projects |
-| Manager | Triage, assign, update, comment, and log feedback |
-| Member | Comment and update the status of feedback assigned to them; see the team roster without per-person workload |
-| Custom | Any combination, defined per project in settings |
+| **Owner** | Everything an admin can, plus transfer ownership and delete the organization |
+| **Admin** | Triage, assign, delete feedback; manage projects, team, roles, taxonomies and members |
+| **Manager** | Triage, assign, update, comment and log feedback |
+| **Member** | Comment on and update the status of feedback assigned to them |
+| **Custom** | Any combination, defined per project |
 
-Capabilities live in `lib/auth/permissions.ts` and are enforced in the backend
-(`requireCapability`), never only in the UI.
+Capabilities live in `lib/auth/permissions.ts` and are enforced in the
+backend (`requireCapability`), never only in the UI.
 
----
+</details>
 
-## Getting started
+<details>
+<summary><b>🚫 Deliberately out of scope</b></summary>
 
-Requirements: Node 20+ and `pnpm`.
+<br>
 
-```bash
-pnpm install
-cp .env.example .env.local
-```
+Third-party integrations (Slack, Jira), AI summaries or deduplication, public
+voting and roadmaps, billing, and CSV import/export.
 
-The app needs **two** processes:
-
-```bash
-# Terminal 1: backend (watch + codegen)
-npx convex dev
-
-# Terminal 2: frontend
-pnpm dev
-```
-
-Configure auth once on the deployment (see `.env.example` for details):
-`JWT_PRIVATE_KEY`, `JWKS`, `SITE_URL`, and optionally `AUTH_GOOGLE_ID` /
-`AUTH_GOOGLE_SECRET` for Google sign-in.
-
-Open `http://localhost:3000`, create an account, and name your organization
-and first project.
-Open *Project settings*, copy the public link, and submit some feedback to
-see it arrive in the inbox and the overview.
-
-### Scripts
-
-| Command | What it does |
-| --- | --- |
-| `pnpm dev` | Next.js dev server |
-| `pnpm build` / `pnpm start` | Production build and server |
-| `pnpm lint` | ESLint |
-| `pnpm test` | Backend authorization and intake suites (Vitest + convex-test) |
-| `pnpm typecheck` | Typecheck the app and the Convex backend |
-| `npx convex dev` | Backend watch + codegen |
+</details>
 
 ---
 
-## Deploying
+<div align="center">
 
-Production runs the Next.js app on Vercel (build command
-`npx convex deploy --cmd 'pnpm build'`) against a Convex production
-deployment. See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for the full runbook:
-environment variables, OAuth and email setup, post-deploy data steps,
-backups, monitoring, the security checklist, and rollback. CI
-(`.github/workflows/ci.yml`) runs lint, typechecks, tests, and a build on every
-push and pull request.
+Built by **[Angel Osorio](https://github.com/Angel-oso)** as an end-to-end
+product + engineering case study.
 
----
+**[🌐 Open InsightFlow →](https://insight-flow-theta-beryl.vercel.app/)**
 
-## Deliberately out of scope
-
-Integrations (Slack, Jira, email), AI summaries or deduplication, public
-voting or roadmaps, billing, CSV import/export, and bulk edits (bulk
-delete exists, for spam cleanup).
-
----
-
-*Designed and built as an end-to-end product + engineering case study: public
-intake, role-based workflows, feedback prioritization, and decision
-dashboards.*
+</div>
