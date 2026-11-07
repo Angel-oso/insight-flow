@@ -32,9 +32,6 @@ importers:
       '@convex-dev/rate-limiter':
         specifier: ^0.4.3
         version: 0.4.3(@standard-schema/spec@1.1.0)(convex@1.49.0(react@19.2.8))(prettier@3.9.6)(react@19.2.8)(typescript@5.9.3)(zod@4.6.7)
-      '@convex-dev/resend':
-        specifier: ^0.2.10
-        version: 0.2.10(@standard-schema/spec@1.1.0)(convex-helpers@0.1.134(@standard-schema/spec@1.1.0)(convex@1.49.0(react@19.2.8))(prettier@3.9.6)(react@19.2.8)(typescript@5.9.3)(zod@4.6.7))(convex@1.49.0(react@19.2.8))(prettier@3.9.6)(react@19.2.8)(typescript@5.9.3)(zod@4.6.7)
       '@oslojs/crypto':
         specifier: ^1.0.1
         version: 1.0.1
@@ -408,20 +405,6 @@ packages:
     peerDependencies:
       convex: ^1.43.0
 
-  '@convex-dev/batch-worker@0.3.6':
-    resolution: {integrity: sha512-tR+9DaHR3jG3oqkIFX0ok/6944h7UHEQgT6HTmiuxU+lERYuYMsxA2IWwFD5yTFbCpO3YJhqXU4QdGY90sgUqQ==}
-    peerDependencies:
-      convex: ^1.43.0
-
-  '@convex-dev/rate-limiter@0.3.2':
-    resolution: {integrity: sha512-+oBPsBfFbzdxiF/9XaaTQmVnvDlvEfg/c69/v8LxTbw4VLuiflIKlfnPQL8OS0azXQQ11hcPWHmU8ytFmHKDXA==}
-    peerDependencies:
-      convex: ^1.24.8
-      react: ^18.2.0 || ^19.0.0
-    peerDependenciesMeta:
-      react:
-        optional: true
-
   '@convex-dev/rate-limiter@0.4.3':
     resolution: {integrity: sha512-IXIEGbZBANC5B23pGmIui7p49kSiltNWyJ7wX7nFmkR396X/Oj9ebgScgxSJMAW7DkhpUtt1NAnQHhjB0v6a/A==}
     peerDependencies:
@@ -430,18 +413,6 @@ packages:
     peerDependenciesMeta:
       react:
         optional: true
-
-  '@convex-dev/resend@0.2.10':
-    resolution: {integrity: sha512-+REZw2Uyt9ht37uTyxFIurntjzRL36369Gwpa53VDlRRcgh/JBxhKbFUeg8brTNiHrSiqB18FZofimi+YWuVgg==}
-    peerDependencies:
-      convex: ^1.43.0
-      convex-helpers: ^0.1.106
-
-  '@convex-dev/workpool@0.4.15':
-    resolution: {integrity: sha512-eweNWj3nHnUpwT40S5qwtA/d9LbuVMXlBP6GqM5tE4+eAOkzWbudiiCz9bi1bBpFSjtnbdRfQ+PoBG/STqgj8A==}
-    peerDependencies:
-      convex: ^1.43.0
-      convex-helpers: ^0.1.94
 
   '@dotenvx/dotenvx@1.75.1':
     resolution: {integrity: sha512-/BITOC9dmS/edY2zQwZNicQ059O6RKabtQfyEafV0nGtfYRNHYy1DIPiYVcov40+tob9hfmBnbR963dS+EQ1DQ==}
@@ -1444,9 +1415,6 @@ packages:
   '@sindresorhus/merge-streams@4.0.0':
     resolution: {integrity: sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ==}
     engines: {node: '>=18'}
-
-  '@stablelib/base64@1.0.1':
-    resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
@@ -2600,9 +2568,6 @@ packages:
   fast-levenshtein@2.0.6:
     resolution: {integrity: sha512-DCXu6Ifhqcks7TZKY3Hxp3y6qphY5SJZmrWMDrKcERSOXWQdMhU9Ig/PYrzyw/ul9jOIyh0N4M0tbC5hodg8dw==}
 
-  fast-sha256@1.3.0:
-    resolution: {integrity: sha512-n11RGP/lrWEFI/bWdygLxhI+pVeo1ZYIVwvvPkW7azl/rOy+F3HYRZ2K5zeE9mmkhQppyv9sQFx0JM9UabnpPQ==}
-
   fast-uri@3.1.9:
     resolution: {integrity: sha512-hS/0Wt3Ya043oKXs0sIxrMpKQITXhMLIrVAKKXi4gozGC9v7YRWVnXIZzjNPTO02M9BdxLCWqK1yRXgNziVyJQ==}
 
@@ -3547,9 +3512,6 @@ packages:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
     engines: {node: '>= 0.4'}
 
-  postal-mime@2.7.6:
-    resolution: {integrity: sha512-UUlyE2KlxmvwMGq060onF/VWU3zD6dVW31FwokQ5v26jWd35fbs2MoTFzh+jXnPwAyV2MULMKXcBInGOl5TO6Q==}
-
   postcss-selector-parser@7.1.7:
     resolution: {integrity: sha512-wWBro/7hJ40ye6TPiXkUQoXKCw23xSsjriUvqd7Uls9Sso3oLiON1flc18cCdnjgCRXw4fBVqUJJeOdDTh3P3g==}
     engines: {node: '>=4'}
@@ -3633,25 +3595,12 @@ packages:
     resolution: {integrity: sha512-dYqgNSZbDwkaJ2ceRd9ojCGjBq+mOm9LmtXnAnEGyHhN/5R7iDW2TRw3h+o/jCFxus3P2LfWIIiwowAjANm7IA==}
     engines: {node: '>= 0.4'}
 
-  remeda@2.58.0:
-    resolution: {integrity: sha512-uCy/WL+c+IF/oAb+sjgZ4Y7XPsW58wP8EWiYpIcqWQZBnNEcb8RnLh9PHsERA97ONpkebGw4S6qNcOtFQ+HG7A==}
-    engines: {node: '>=18.0.0'}
-
   require-from-string@2.0.2:
     resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
     engines: {node: '>=0.10.0'}
 
   reselect@5.2.0:
     resolution: {integrity: sha512-AgZ3UOZm3YndfrJ4OYjgrT7bmCm/1iqkjvEfH/oYjzh6PD2qw4QuT3jjnXIrpdt4MTpMXclMT3lXbmRY+XRakw==}
-
-  resend@6.37.0:
-    resolution: {integrity: sha512-iYNhmhfXVomZr+TMIxf6oqj7kTeGqPDE+wGcYw1H4g8WMBR59NsbShnUz43dSYpStW16iEA6dZs+egqQmdm0zA==}
-    engines: {node: '>=20'}
-    peerDependencies:
-      '@react-email/render': '*'
-    peerDependenciesMeta:
-      '@react-email/render':
-        optional: true
 
   resolve-from@4.0.0:
     resolution: {integrity: sha512-pb/MYmXstAkysRFx8piNI1tGFNQIFA3vkE3Gq4EuA1dF6gHp/+vgZqsCGJapvy8N3Q+4o7FwvquPJcnZ7RYy4g==}
@@ -3808,12 +3757,6 @@ packages:
     resolution: {integrity: sha512-WjlahMgHmCJpqzU8bIBy4qtsZdU9lRlcZE3Lvyej6t4tuOuv1vk57OW3MBrj6hXBFx/nNoC9MPMTcr5YA7NQbg==}
     engines: {node: '>=6'}
 
-  standardwebhooks@1.0.0:
-    resolution: {integrity: sha512-BbHGOQK9olHPMvQNHWul6MYlrRTAOKn03rOe4A8O3CLWhNf4YHBqq2HJKKC+sfqpxiBY52pNeesD6jIiLDz8jg==}
-
-  standardwebhooks@1.1.1:
-    resolution: {integrity: sha512-bCbX9ZEyFkWPsRz7Bl3NuQUJohmwGSev/yhr7vhaGPlc4AfIrspIRa6cPTBuI1ItmrTDJ4d/S2hCsfe4+vQGnQ==}
-
   std-env@4.3.0:
     resolution: {integrity: sha512-OtU/EgQ1kIm5KwqQpBC6ZEMXrZRui11w8zgfTWp8cdO9B8OaPsbA8bTHO2P+HNo1VlUTGMVBwPhydu6poeXiag==}
 
@@ -3904,9 +3847,6 @@ packages:
   supports-preserve-symlinks-flag@1.0.0:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
-
-  svix@1.99.1:
-    resolution: {integrity: sha512-JfpvbAg5iT5NagDAfOq3e6Ci6NbOMbMm6C3DnfDBB60m2JDK+Z2hXPE9XNAmutb53DCdPoih1V70IbklZnX09A==}
 
   systeminformation@5.33.19:
     resolution: {integrity: sha512-Zm7wGeCG7PqfvzegMJIzrxICopWqYCeLATVmvxOOci1isLcNVKgY4Fr0hhYQzvc7cgtK3377jQVChTFAnznOiA==}
@@ -4553,24 +4493,6 @@ snapshots:
       - typescript
       - zod
 
-  '@convex-dev/batch-worker@0.3.6(@standard-schema/spec@1.1.0)(convex@1.49.0(react@19.2.8))(prettier@3.9.6)(react@19.2.8)(typescript@5.9.3)(zod@4.6.7)':
-    dependencies:
-      convex: 1.49.0(react@19.2.8)
-      convex-helpers: 0.1.134(@standard-schema/spec@1.1.0)(convex@1.49.0(react@19.2.8))(prettier@3.9.6)(react@19.2.8)(typescript@5.9.3)(zod@4.6.7)
-    transitivePeerDependencies:
-      - '@standard-schema/spec'
-      - hono
-      - prettier
-      - react
-      - typescript
-      - zod
-
-  '@convex-dev/rate-limiter@0.3.2(convex@1.49.0(react@19.2.8))(react@19.2.8)':
-    dependencies:
-      convex: 1.49.0(react@19.2.8)
-    optionalDependencies:
-      react: 19.2.8
-
   '@convex-dev/rate-limiter@0.4.3(@standard-schema/spec@1.1.0)(convex@1.49.0(react@19.2.8))(prettier@3.9.6)(react@19.2.8)(typescript@5.9.3)(zod@4.6.7)':
     dependencies:
       '@convex-dev/batch-worker': 0.3.5(@standard-schema/spec@1.1.0)(convex@1.49.0(react@19.2.8))(prettier@3.9.6)(react@19.2.8)(typescript@5.9.3)(zod@4.6.7)
@@ -4581,37 +4503,6 @@ snapshots:
       - '@standard-schema/spec'
       - hono
       - prettier
-      - typescript
-      - zod
-
-  '@convex-dev/resend@0.2.10(@standard-schema/spec@1.1.0)(convex-helpers@0.1.134(@standard-schema/spec@1.1.0)(convex@1.49.0(react@19.2.8))(prettier@3.9.6)(react@19.2.8)(typescript@5.9.3)(zod@4.6.7))(convex@1.49.0(react@19.2.8))(prettier@3.9.6)(react@19.2.8)(typescript@5.9.3)(zod@4.6.7)':
-    dependencies:
-      '@convex-dev/rate-limiter': 0.3.2(convex@1.49.0(react@19.2.8))(react@19.2.8)
-      '@convex-dev/workpool': 0.4.15(@standard-schema/spec@1.1.0)(convex-helpers@0.1.134(@standard-schema/spec@1.1.0)(convex@1.49.0(react@19.2.8))(prettier@3.9.6)(react@19.2.8)(typescript@5.9.3)(zod@4.6.7))(convex@1.49.0(react@19.2.8))(prettier@3.9.6)(react@19.2.8)(typescript@5.9.3)(zod@4.6.7)
-      convex: 1.49.0(react@19.2.8)
-      convex-helpers: 0.1.134(@standard-schema/spec@1.1.0)(convex@1.49.0(react@19.2.8))(prettier@3.9.6)(react@19.2.8)(typescript@5.9.3)(zod@4.6.7)
-      remeda: 2.58.0
-      resend: 6.37.0
-      svix: 1.99.1
-    transitivePeerDependencies:
-      - '@react-email/render'
-      - '@standard-schema/spec'
-      - hono
-      - prettier
-      - react
-      - typescript
-      - zod
-
-  '@convex-dev/workpool@0.4.15(@standard-schema/spec@1.1.0)(convex-helpers@0.1.134(@standard-schema/spec@1.1.0)(convex@1.49.0(react@19.2.8))(prettier@3.9.6)(react@19.2.8)(typescript@5.9.3)(zod@4.6.7))(convex@1.49.0(react@19.2.8))(prettier@3.9.6)(react@19.2.8)(typescript@5.9.3)(zod@4.6.7)':
-    dependencies:
-      '@convex-dev/batch-worker': 0.3.6(@standard-schema/spec@1.1.0)(convex@1.49.0(react@19.2.8))(prettier@3.9.6)(react@19.2.8)(typescript@5.9.3)(zod@4.6.7)
-      convex: 1.49.0(react@19.2.8)
-      convex-helpers: 0.1.134(@standard-schema/spec@1.1.0)(convex@1.49.0(react@19.2.8))(prettier@3.9.6)(react@19.2.8)(typescript@5.9.3)(zod@4.6.7)
-    transitivePeerDependencies:
-      - '@standard-schema/spec'
-      - hono
-      - prettier
-      - react
       - typescript
       - zod
 
@@ -5401,8 +5292,6 @@ snapshots:
       - supports-color
 
   '@sindresorhus/merge-streams@4.0.0': {}
-
-  '@stablelib/base64@1.0.1': {}
 
   '@standard-schema/spec@1.1.0': {}
 
@@ -6650,8 +6539,6 @@ snapshots:
 
   fast-levenshtein@2.0.6: {}
 
-  fast-sha256@1.3.0: {}
-
   fast-uri@3.1.9: {}
 
   fastq@1.20.1:
@@ -7508,8 +7395,6 @@ snapshots:
 
   possible-typed-array-names@1.1.0: {}
 
-  postal-mime@2.7.6: {}
-
   postcss-selector-parser@7.1.7:
     dependencies:
       cssesc: 3.0.0
@@ -7607,16 +7492,9 @@ snapshots:
       gopd: 1.2.0
       set-function-name: 2.0.2
 
-  remeda@2.58.0: {}
-
   require-from-string@2.0.2: {}
 
   reselect@5.2.0: {}
-
-  resend@6.37.0:
-    dependencies:
-      postal-mime: 2.7.6
-      standardwebhooks: 1.1.1
 
   resolve-from@4.0.0: {}
 
@@ -7879,16 +7757,6 @@ snapshots:
     dependencies:
       type-fest: 0.7.1
 
-  standardwebhooks@1.0.0:
-    dependencies:
-      '@stablelib/base64': 1.0.1
-      fast-sha256: 1.3.0
-
-  standardwebhooks@1.1.1:
-    dependencies:
-      '@stablelib/base64': 1.0.1
-      fast-sha256: 1.3.0
-
   std-env@4.3.0: {}
 
   stdin-discarder@0.2.2: {}
@@ -7993,10 +7861,6 @@ snapshots:
       has-flag: 4.0.0
 
   supports-preserve-symlinks-flag@1.0.0: {}
-
-  svix@1.99.1:
-    dependencies:
-      standardwebhooks: 1.0.0
 
   systeminformation@5.33.19: {}
 

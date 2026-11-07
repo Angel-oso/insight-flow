@@ -124,7 +124,6 @@ export const sendCriticalAlert = internalMutation({
 					unsubscribeUrl: unsubscribe.url,
 				}),
 				headers: unsubscribe.headers,
-				idempotencyKey: `critical:${item._id}:${now}:${recipient.userId}`,
 			});
 		}
 		return recipients.map((recipient) => recipient.email);
@@ -164,7 +163,6 @@ export const sendCriticalSummary = internalMutation({
 		if (items.length === 0) return [];
 
 		const recipients = await triageRecipients(ctx, project, "critical");
-		const now = Date.now();
 		for (const recipient of recipients) {
 			const unsubscribe = await unsubscribeFor(ctx, recipient.userId, project._id, "critical", settingsUrl(project));
 			await deliverEmail(ctx, {
@@ -182,7 +180,6 @@ export const sendCriticalSummary = internalMutation({
 					unsubscribeUrl: unsubscribe.url,
 				}),
 				headers: unsubscribe.headers,
-				idempotencyKey: `critical-summary:${projectId}:${now}:${recipient.userId}`,
 			});
 		}
 		return recipients.map((recipient) => recipient.email);

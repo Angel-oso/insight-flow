@@ -179,7 +179,6 @@ export const sendProjectDigest = internalMutation({
 					unsubscribeUrl: unsubscribe.url,
 				}),
 				headers: unsubscribe.headers,
-				idempotencyKey: `digest:${project._id}:${windowEnd}:${recipient.userId}`,
 			});
 		}
 		return { recipients: recipients.map((recipient) => recipient.email), stats };

@@ -86,7 +86,7 @@ export default function PrivacyPage() {
 				<ul>
 					<li><strong>Convex</strong>: backend hosting and database.</li>
 					<li><strong>{LEGAL.webHost}</strong>: hosting of the web application.</li>
-					<li><strong>Resend</strong>: delivery of transactional email.</li>
+					<li><strong>Brevo</strong>: delivery of transactional email.</li>
 					<li><strong>Google</strong>: sign-in, when you choose &ldquo;Continue with Google&rdquo;.</li>
 					<li><strong>Cloudflare Turnstile</strong>: bot protection on public feedback forms and sign-in pages.</li>
 					<li><strong>Sentry</strong>: error monitoring, configured not to collect IP addresses or cookies.</li>

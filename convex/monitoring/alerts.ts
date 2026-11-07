@@ -202,7 +202,6 @@ export const run = internalMutation({
 		if (hasAlerts(plan)) {
 			await deliverEmail(ctx, {
 				to,
-				idempotencyKey: `ops-alert-${now}`,
 				...alertEmail(plan, deploymentName()),
 			});
 		}

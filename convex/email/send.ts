@@ -1,9 +1,8 @@
-import { Resend } from "@convex-dev/resend";
 import { MINUTE, RateLimiter } from "@convex-dev/rate-limiter";
 import { ConvexError, v } from "convex/values";
 import { components, internal } from "../_generated/api";
 import { internalMutation, type ActionCtx, type MutationCtx } from "../_generated/server";
-import { emailFrom, emailMode, resendTestMode } from "./config";
+import { emailFrom, emailMode } from "./config";
 import { authCodeEmail, type EmailContent } from "./templates";
 
 /** Abuse limits for emails a visitor can trigger without being a member. */
@@ -20,29 +19,19 @@ export const emailRateLimiter = new RateLimiter(components.rateLimiter, {
 
 export type DeliveryResult = "sent" | "logged" | "skipped";
 
-export function resendClient() {
-	// testMode stays on only when explicitly asked for (staging with
-	// *@resend.dev recipients). With a real key and domain it must be off,
-	// or the component rejects every real recipient. Webhook events
-	// (RESEND_WEBHOOK_SECRET, /resend-webhook) feed bounce suppression.
-	return new Resend(components.resend, {
-		testMode: resendTestMode(),
-		onEmailEvent: internal.notifications.suppression.onEmailEvent,
-	});
-}
-
 export type EmailHeader = { name: string; value: string };
 
 /**
- * Single delivery point for every email. Queues through the Resend
- * component (durable, retried, idempotent) or, with EMAIL_DEV_LOG=true,
+ * Single delivery point for every email. Schedules a Brevo send
+ * (convex/email/brevo.ts, retried on transient errors) that runs only once
+ * the calling mutation commits, or, with EMAIL_DEV_LOG=true,
  * prints the message to the Convex log so local development needs no
  * email provider. Without a key it logs an error and skips: notifications
  * never break the write that triggered them.
  */
 export async function deliverEmail(
 	ctx: MutationCtx | ActionCtx,
-	message: EmailContent & { to: string; idempotencyKey?: string; headers?: EmailHeader[] },
+	message: EmailContent & { to: string; headers?: EmailHeader[] },
 ): Promise<DeliveryResult> {
 	const mode = emailMode();
 	if (mode === "log") {
@@ -56,18 +45,20 @@ export async function deliverEmail(
 	}
 	if (mode === "disabled") {
 		console.error(
-			`[email] RESEND_API_KEY is not set; skipped "${message.subject}" to ${message.to}.`,
+			`[email] BREVO_API_KEY or EMAIL_FROM is not set; skipped "${message.subject}" to ${message.to}.`,
 		);
 		return "skipped";
 	}
-	await resendClient().sendEmail(ctx, {
+	await ctx.scheduler.runAfter(0, internal.email.brevo.send, {
 		from: emailFrom(),
 		to: message.to,
 		subject: message.subject,
 		html: message.html,
 		text: message.text,
-		...(message.idempotencyKey ? { idempotencyKey: message.idempotencyKey } : {}),
-		...(message.headers?.length ? { headers: message.headers } : {}),
+		...(message.headers?.length
+			? { headers: Object.fromEntries(message.headers.map((header) => [header.name, header.value])) }
+			: {}),
+		attempt: 0,
 	});
 	return "sent";
 }

@@ -293,7 +293,7 @@ export default defineSchema({
 		.index("by_feedbackId_at", ["feedbackId", "at"])
 		.index("by_projectId_state_at", ["projectId", "state", "at"])
 		.index("by_at", ["at"]),
-	// Addresses that hard-bounced or complained (Resend webhook). Notification
+	// Addresses that hard-bounced or complained (Brevo webhook). Notification
 	// emails skip them; auth codes still go out.
 	emailSuppressions: defineTable({
 		email: v.string(),

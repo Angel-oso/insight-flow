@@ -54,7 +54,7 @@ import {
  * - users are linked/patched only after the email is verified
  *   (createOrUpdateAuthUser in convex/email/authGuards.ts).
  *
- * Codes go out through convex/email (Resend component, or the Convex log
+ * Codes go out through convex/email (Brevo, or the Convex log
  * with EMAIL_DEV_LOG=true).
  */
 const deploymentEnv =

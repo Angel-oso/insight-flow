@@ -151,7 +151,7 @@ test("email invitations are rate limited per recipient and per inviter", async (
 test("no invitation is created when email delivery is not configured", async () => {
 	const { t, owner, projectSlug, projectId, roleId } = await workspace();
 	vi.stubEnv("EMAIL_DEV_LOG", "");
-	vi.stubEnv("RESEND_API_KEY", "");
+	vi.stubEnv("BREVO_API_KEY", "");
 	vi.spyOn(console, "error").mockImplementation(() => {});
 	await expect(
 		owner.action(api.invitations.actions.sendByEmail, { projectSlug, roleId: roleId("member"), expiresInHours: 1, email: "x@example.com" }),

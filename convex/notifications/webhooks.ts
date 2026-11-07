@@ -1,25 +1,53 @@
 import { internal } from "../_generated/api";
 import { httpAction } from "../_generated/server";
-import { resendClient } from "../email/send";
 import { escapeHtml } from "../email/templates";
 import { isWellFormedToken, type NotificationKind } from "./preferences";
 
+/** Constant-time string comparison for the webhook secret. */
+function safeEqual(a: string, b: string) {
+	const left = new TextEncoder().encode(a);
+	const right = new TextEncoder().encode(b);
+	let diff = left.length ^ right.length;
+	for (let i = 0; i < Math.max(left.length, right.length); i++) {
+		diff |= (left[i] ?? 0) ^ (right[i] ?? 0);
+	}
+	return diff === 0;
+}
+
 /**
- * POST /resend-webhook. Resend delivery events, verified by the component
- * with RESEND_WEBHOOK_SECRET (svix signature). Without the secret the
- * route refuses every request instead of trusting unsigned payloads.
+ * POST /brevo-webhook. Brevo transactional events (bounces, complaints).
+ * Brevo does not sign webhooks, so the URL carries a shared secret
+ * (?token=BREVO_WEBHOOK_SECRET), or the request sends it as a Bearer token.
+ * Without the secret configured the route refuses every request.
  */
-export const resendWebhook = httpAction(async (ctx, req) => {
-	if (!process.env.RESEND_WEBHOOK_SECRET?.trim()) {
-		console.error("[resend-webhook] RESEND_WEBHOOK_SECRET is not set; event rejected.");
+export const brevoWebhook = httpAction(async (ctx, req) => {
+	const secret = process.env.BREVO_WEBHOOK_SECRET?.trim();
+	if (!secret) {
+		console.error("[brevo-webhook] BREVO_WEBHOOK_SECRET is not set; event rejected.");
 		return new Response("Webhook not configured", { status: 503 });
 	}
+	const url = new URL(req.url);
+	const bearer = /^Bearer\s+(.+)$/i.exec(req.headers.get("authorization") ?? "")?.[1]?.trim();
+	const provided = url.searchParams.get("token") ?? bearer ?? "";
+	if (!safeEqual(provided, secret)) return new Response("Unauthorized", { status: 401 });
+
+	let payload: unknown;
 	try {
-		return await resendClient().handleResendEventWebhook(ctx, req);
-	} catch (error) {
-		console.warn("[resend-webhook] Rejected event:", error instanceof Error ? error.message : error);
-		return new Response("Invalid webhook", { status: 400 });
+		payload = JSON.parse((await req.text()).slice(0, 100_000));
+	} catch {
+		return new Response("Invalid JSON", { status: 400 });
 	}
+	const items: unknown[] = (Array.isArray(payload) ? payload : [payload]).slice(0, 50);
+	const events = items.flatMap((item) => {
+		if (typeof item !== "object" || item === null) return [];
+		const { event, email, reason } = item as Record<string, unknown>;
+		if (typeof event !== "string" || typeof email !== "string") return [];
+		return [{ event, email, ...(typeof reason === "string" ? { reason: reason.slice(0, 200) } : {}) }];
+	});
+	if (events.length > 0) {
+		await ctx.runMutation(internal.notifications.suppression.onBrevoEvents, { events });
+	}
+	return new Response(null, { status: 204 });
 });
 
 const LIST_LABELS: Record<NotificationKind, string> = {

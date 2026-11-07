@@ -137,7 +137,7 @@ export const createForEmail = internalMutation({
 		if (!inviter?.email || inviter.emailVerificationTime === undefined)
 			throw new ConvexError("Verify your email address before sending invitations by email.");
 		await enforceRateLimit(ctx, "inviteEmailUser", args.creatorId);
-		const { project, role, invitationId } = await insertInvitation(ctx, args, email);
+		const { project, role } = await insertInvitation(ctx, args, email);
 		await enforceRateLimit(ctx, "inviteEmailProject", project._id);
 		await enforceRateLimit(ctx, "inviteEmailOrganization", project.organizationId);
 		await enforceRateLimit(ctx, "inviteEmailRecipient", email);
@@ -149,7 +149,6 @@ export const createForEmail = internalMutation({
 		const organization = await ctx.db.get("organizations", project.organizationId);
 		await deliverEmail(ctx, {
 			to: email,
-			idempotencyKey: `invitation:${invitationId}`,
 			...projectInvitationEmail({
 				projectName: project.name,
 				organizationName: organization?.name ?? "",

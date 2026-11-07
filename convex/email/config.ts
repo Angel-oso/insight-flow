@@ -2,17 +2,14 @@
  * Email environment, read at call time so tests and `npx convex env set`
  * changes apply without a redeploy of module state.
  *
- * - RESEND_API_KEY  Resend API key (read by the @convex-dev/resend component).
- * - EMAIL_FROM      Sender, e.g. "InsightFlow <no-reply@yourdomain.com>".
+ * - BREVO_API_KEY   Brevo API key (transactional email, convex/email/brevo.ts).
+ * - EMAIL_FROM      Sender verified in Brevo, e.g. "InsightFlow <you@gmail.com>".
+ *                   Brevo accepts a single verified address, no domain needed.
  * - SITE_URL        App origin used for every link in an email.
  * - EMAIL_DEV_LOG   "true" logs emails (and auth codes) to the Convex log
  *                   instead of sending them. For local development only.
- * - RESEND_TEST_MODE "true" keeps the component in Resend test mode: only
- *                   *@resend.dev test recipients are accepted (staging).
  */
 export type EmailMode = "log" | "send" | "disabled";
-
-const DEFAULT_FROM = "InsightFlow <onboarding@resend.dev>";
 
 function env(name: string): string | undefined {
 	const value = typeof process === "undefined" ? undefined : process.env[name];
@@ -20,17 +17,29 @@ function env(name: string): string | undefined {
 	return trimmed ? trimmed : undefined;
 }
 
+export function brevoApiKey() {
+	return env("BREVO_API_KEY");
+}
+
+/** Sending needs both the key and a sender; otherwise email is disabled. */
 export function emailMode(): EmailMode {
 	if (env("EMAIL_DEV_LOG") === "true") return "log";
-	return env("RESEND_API_KEY") ? "send" : "disabled";
+	return brevoApiKey() && env("EMAIL_FROM") ? "send" : "disabled";
 }
 
 export function emailFrom() {
-	return env("EMAIL_FROM") ?? DEFAULT_FROM;
+	return env("EMAIL_FROM") ?? "";
 }
 
-export function resendTestMode() {
-	return env("RESEND_TEST_MODE") === "true";
+const ADDRESS = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
+
+/** "Name <a@b.c>" or "a@b.c" → Brevo sender object, or null if malformed. */
+export function parseSender(value: string): { email: string; name?: string } | null {
+	const match = /^\s*(.*?)\s*<([^<>]+)>\s*$/.exec(value);
+	const email = (match ? match[2] : value).trim();
+	if (!ADDRESS.test(email)) return null;
+	const name = match?.[1]?.replace(/^"|"$/g, "").trim();
+	return name ? { email, name } : { email };
 }
 
 /** App origin without a trailing slash; falls back to localhost for dev. */

@@ -1,13 +1,10 @@
 import aggregate from "@convex-dev/aggregate/convex.config.js";
 import rateLimiter from "@convex-dev/rate-limiter/convex.config.js";
-import resend from "@convex-dev/resend/convex.config.js";
 import { defineApp } from "convex/server";
 
 const app = defineApp();
 // Abuse protection for public intake and other user-triggered writes.
 app.use(rateLimiter);
-// Transactional email (auth codes, alerts, digests).
-app.use(resend);
 // Feedback metrics without reading every row (see convex/feedback/aggregates.ts).
 // Every feedback write keeps them in sync through convex/feedback/store.ts.
 app.use(aggregate, { name: "feedbackByReceived" });

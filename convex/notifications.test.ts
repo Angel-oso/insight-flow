@@ -353,41 +353,24 @@ test("invalid unsubscribe tokens are refused", async () => {
 		.toMatchObject({ criticalAlerts: true, weeklyDigest: false });
 });
 
-function bounceEvent(to: string, type: string) {
-	const now = new Date().toISOString();
-	return {
-		id: "email-id",
-		event: {
-			type: "email.bounced",
-			created_at: now,
-			data: {
-				created_at: now,
-				email_id: "re_123",
-				from: "InsightFlow <no-reply@example.com>",
-				to: [to],
-				subject: "Alert",
-				bounce: { message: "Mailbox does not exist", subType: "General", type },
-			},
-		},
-	} as never;
-}
-
 test("hard bounces and complaints suppress notification emails but not auth codes", async () => {
 	const { t, manager } = await fixture({ criticalAlerts: true });
 	vi.spyOn(console, "warn").mockImplementation(() => {});
-	// Transient bounces are ignored.
-	await t.mutation(internal.notifications.suppression.onEmailEvent, bounceEvent("Manager@Example.com", "Transient"));
+	const onEvents = internal.notifications.suppression.onBrevoEvents;
+	// Soft bounces and unknown events are ignored.
+	await t.mutation(onEvents, {
+		events: [
+			{ event: "soft_bounce", email: "Manager@Example.com" },
+			{ event: "constructor", email: "manager@example.com" },
+		],
+	});
 	expect(await t.run((ctx) => ctx.db.query("emailSuppressions").collect())).toEqual([]);
-	await t.mutation(internal.notifications.suppression.onEmailEvent, bounceEvent("Moe <Manager@Example.com>", "Permanent"));
-	const now = new Date().toISOString();
-	await t.mutation(internal.notifications.suppression.onEmailEvent, {
-		id: "email-id-2",
-		event: {
-			type: "email.complained",
-			created_at: now,
-			data: { created_at: now, email_id: "re_456", from: "x@example.com", to: "admin@example.com", subject: "Digest" },
-		},
-	} as never);
+	await t.mutation(onEvents, {
+		events: [
+			{ event: "hard_bounce", email: "Moe <Manager@Example.com>", reason: "Mailbox does not exist" },
+			{ event: "spam", email: "admin@example.com" },
+		],
+	});
 	const rows = await t.run((ctx) => ctx.db.query("emailSuppressions").collect());
 	expect(rows.map((row) => [row.email, row.reason]).sort()).toEqual([
 		["admin@example.com", "complained"],
@@ -404,24 +387,32 @@ test("hard bounces and complaints suppress notification emails but not auth code
 	expect(loggedEmails().some((line) => line.includes("to=manager@example.com") && line.includes("12345678"))).toBe(true);
 });
 
-test("resend webhook refuses unsigned or unconfigured requests", async () => {
+test("brevo webhook needs the shared secret", async () => {
 	const { t } = await fixture();
 	vi.spyOn(console, "error").mockImplementation(() => {});
 	vi.spyOn(console, "warn").mockImplementation(() => {});
-	const body = JSON.stringify({ type: "email.bounced", data: {} });
-	expect((await t.fetch("/resend-webhook", { method: "POST", body })).status).toBe(503);
-	vi.stubEnv("RESEND_WEBHOOK_SECRET", "whsec_dGVzdHNlY3JldHRlc3RzZWNyZXQ=");
-	const response = await t.fetch("/resend-webhook", {
+	const body = JSON.stringify({ event: "hard_bounce", email: "victim@example.com" });
+	const suppressed = () => t.run((ctx) => ctx.db.query("emailSuppressions").collect());
+	// Not configured: every request is refused.
+	expect((await t.fetch("/brevo-webhook?token=anything", { method: "POST", body })).status).toBe(503);
+	vi.stubEnv("BREVO_WEBHOOK_SECRET", "s3cret-token");
+	expect((await t.fetch("/brevo-webhook", { method: "POST", body })).status).toBe(401);
+	expect((await t.fetch("/brevo-webhook?token=wrong", { method: "POST", body })).status).toBe(401);
+	expect(await suppressed()).toEqual([]);
+	expect((await t.fetch("/brevo-webhook?token=s3cret-token", { method: "POST", body: "{nope" })).status).toBe(400);
+	// Right secret, in the URL or as a Bearer token.
+	expect((await t.fetch("/brevo-webhook?token=s3cret-token", { method: "POST", body })).status).toBe(204);
+	const batch = JSON.stringify([{ event: "spam", email: "other@example.com" }, "junk", { event: 1 }]);
+	const bearer = await t.fetch("/brevo-webhook", {
 		method: "POST",
-		body,
-		headers: {
-			"svix-id": "msg_1",
-			"svix-timestamp": String(Math.floor(Date.now() / 1000)),
-			"svix-signature": "v1,bm90LWEtc2lnbmF0dXJl",
-		},
+		body: batch,
+		headers: { Authorization: "Bearer s3cret-token" },
 	});
-	expect(response.status).toBe(400);
-	expect(await t.run((ctx) => ctx.db.query("emailSuppressions").collect())).toEqual([]);
+	expect(bearer.status).toBe(204);
+	expect((await suppressed()).map((row) => [row.email, row.reason]).sort()).toEqual([
+		["other@example.com", "complained"],
+		["victim@example.com", "bounced"],
+	]);
 });
 
 test("retention purge trims the alert ledger", async () => {

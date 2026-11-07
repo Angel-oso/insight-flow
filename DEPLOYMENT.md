@@ -19,7 +19,7 @@ Browser ──HTTPS──▶ Next.js app (Vercel, or any Node host)
    ├──WSS/HTTPS──▶ Convex production deployment  https://<name>.convex.cloud
    │                 • database, queries, mutations, actions, scheduler
    │                 • Convex Auth (password + Google), rate limits, Turnstile check
-   │                 • Resend component (transactional email)
+   │                 • Brevo API (transactional email)
    │
    └──HTTPS──────▶ Convex HTTP actions             https://<name>.convex.site
                      • /api/auth/* (OAuth sign-in and callback, JWKS)
@@ -99,24 +99,31 @@ Browser ──HTTPS──▶ Next.js app (Vercel, or any Node host)
    and link the Privacy Policy (`/privacy`) and Terms (`/terms`).
 5. Set `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` on the Convex deployment.
 
-### 2.4 Email (Resend)
+### 2.4 Email (Brevo)
 
-1. Add and verify your sending domain in Resend: publish the **SPF** (TXT),
-   **DKIM** (CNAME/TXT) and the recommended **DMARC** records it shows in your
-   DNS, and wait until the domain is *Verified*.
-2. Create an API key with *Sending access* for that domain.
-3. Set `RESEND_API_KEY` and `EMAIL_FROM` (an address on the verified domain)
-   on the Convex deployment. Make sure `EMAIL_DEV_LOG` and `RESEND_TEST_MODE`
-   are **not** set in production. Without `RESEND_API_KEY`, password sign-up,
-   email verification, password reset and email changes **fail** (the code
-   cannot be sent and the user sees an error), and notifications are skipped
-   with an error in the Convex log.
-4. **Bounce/complaint webhook.** In Resend → *Webhooks*, add
-   `https://<deployment>.convex.site/resend-webhook`, enable all `email.*`
-   events, and set its signing secret as `RESEND_WEBHOOK_SECRET` on the Convex
-   deployment. Hard bounces and complaints are then suppressed for
-   notification emails (auth codes still go out). Without the secret the
-   route rejects every call and nothing is suppressed.
+1. Create a free Brevo account. Free plan: 300 emails a day.
+2. *Senders & IPs → Senders* → add the address emails come from (for example
+   your Gmail) and confirm it from the link Brevo sends. No domain is needed;
+   with a free mailbox some messages may land in spam. With your own domain,
+   authenticate it in *Senders & IPs → Domains* (SPF/DKIM) for better
+   delivery.
+3. *SMTP & API → API Keys* → **Generate a new API key**.
+4. Set `BREVO_API_KEY` and `EMAIL_FROM` (the verified sender, e.g.
+   `InsightFlow <you@gmail.com>`) on the Convex deployment. Make sure
+   `EMAIL_DEV_LOG` is **not** set in production. Without both values,
+   password sign-up, email verification, password reset and email changes
+   **fail** (the code cannot be sent and the user sees an error), and
+   notifications are skipped with an error in the Convex log.
+5. Sends run as background jobs after the triggering write commits and are
+   retried on rate limits and server errors (up to 4 retries). A permanent
+   failure shows up in the Convex logs and in ops alerts.
+6. **Bounce/complaint webhook (optional).** Set `BREVO_WEBHOOK_SECRET` to a
+   long random string on the Convex deployment. In Brevo → *Transactional →
+   Settings → Webhook*, add
+   `https://<deployment>.convex.site/brevo-webhook?token=<BREVO_WEBHOOK_SECRET>`
+   with the *Hard bounce*, *Invalid email* and *Spam* events. Those addresses
+   are then suppressed for notification emails (auth codes still go out).
+   Without the secret the route rejects every call.
 
 ### 2.5 Cloudflare Turnstile
 
@@ -157,12 +164,11 @@ Set in the dashboard (*Settings → Environment Variables*) or with
 | `JWKS` | Yes | JSON Web Key Set with the public key matching `JWT_PRIVATE_KEY`. |
 | `AUTH_GOOGLE_ID` | For Google sign-in | Google OAuth client ID. |
 | `AUTH_GOOGLE_SECRET` | For Google sign-in | Google OAuth client secret. |
-| `RESEND_API_KEY` | Yes | Resend API key. Without it auth codes cannot be sent, so password sign-up, verification, password reset and email changes fail with an error; notifications are skipped and logged as an error in the Convex log. |
+| `BREVO_API_KEY` | Yes | Brevo API key. Without it auth codes cannot be sent, so password sign-up, verification, password reset and email changes fail with an error; notifications are skipped and logged as an error in the Convex log. |
 | `OPS_ALERT_EMAIL` | Recommended | Address that receives backend failure alerts (failed background jobs, unfinished purges), at most one email per function per hour. Without it the check only logs an error. |
-| `RESEND_WEBHOOK_SECRET` | Yes | Signing secret of the Resend webhook (`/resend-webhook`). Without it bounces and complaints are not recorded. |
-| `EMAIL_FROM` | Yes | Sender, e.g. `InsightFlow <no-reply@example.com>`, on a verified Resend domain. |
+| `BREVO_WEBHOOK_SECRET` | Optional | Shared secret of the Brevo webhook (`/brevo-webhook?token=...`). Without it bounces and complaints are not recorded. |
+| `EMAIL_FROM` | Yes | Sender verified in Brevo, e.g. `InsightFlow <you@gmail.com>`. |
 | `EMAIL_DEV_LOG` | **Must be unset** | `true` logs emails, including auth codes, to the Convex log instead of sending. Development only. |
-| `RESEND_TEST_MODE` | **Must be unset** | `true` only accepts `@resend.dev` recipients (staging). |
 | `TURNSTILE_SECRET_KEY` | Yes | Cloudflare Turnstile secret. Verifies public intake submissions and the auth flows that email a code (sign-up, resend, password reset). Without it those requests are rejected (fails closed). |
 | `INTAKE_CAPTCHA_DISABLED` | **Must be unset** | Exactly `true` turns off the Turnstile check for public intake **and** auth email flows when `TURNSTILE_SECRET_KEY` is unset. Local development and tests only. |
 
@@ -340,7 +346,7 @@ Operational notes:
   ```
 
   Every 15 minutes the `backend failure alerts` cron
-  (`convex/monitoring/alerts.ts`) sends **one** email through Resend when it
+  (`convex/monitoring/alerts.ts`) sends **one** email through Brevo when it
   finds:
   - **Failed scheduled functions**: jobs in `_scheduled_functions` with state
     `failed` that completed since the last run (a stored watermark keeps them
@@ -358,7 +364,7 @@ Operational notes:
   while throttled are counted and reported in the next email. A stuck deletion
   is reported when first seen and then at most once a day. Without
   `OPS_ALERT_EMAIL` the cron logs one `console.error` per run and does nothing
-  else; without `RESEND_API_KEY` no email can go out (use `EMAIL_DEV_LOG=true`
+  else; without `BREVO_API_KEY` no email can go out (use `EMAIL_DEV_LOG=true`
   on dev to see the alert in the logs).
 
   Limits: each run reads at most 2,000 recent scheduled jobs (newest first,
@@ -441,14 +447,13 @@ Before launch and after any infrastructure change:
 - [ ] **Captcha**: `TURNSTILE_SECRET_KEY` and `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
       set, `INTAKE_CAPTCHA_DISABLED` unset. Check both `/f/<slug>` and
       `/signup` show the widget.
-- [ ] **Email**: `RESEND_API_KEY` and `EMAIL_FROM` set, `EMAIL_DEV_LOG` and
-      `RESEND_TEST_MODE` unset; SPF, DKIM, and DMARC pass;
-      `RESEND_WEBHOOK_SECRET` set and a test webhook delivered.
+- [ ] **Email**: `BREVO_API_KEY` and `EMAIL_FROM` (a verified Brevo sender)
+      set, `EMAIL_DEV_LOG` unset; a test sign-up code arrives.
 - [ ] **Secrets**: deploy keys scoped to one environment; Sentry token only in
       build env; nothing secret in `NEXT_PUBLIC_*`.
 - [ ] **Rotation** (yearly, or immediately after a suspected leak): Convex
       deploy keys (dashboard), `AUTH_GOOGLE_SECRET` (Google Console),
-      `RESEND_API_KEY`, `TURNSTILE_SECRET_KEY`, `SENTRY_AUTH_TOKEN`, and
+      `BREVO_API_KEY`, `TURNSTILE_SECRET_KEY`, `SENTRY_AUTH_TOKEN`, and
       `JWT_PRIVATE_KEY` + `JWKS` together (signs everyone out).
 - [ ] **Legal**: this is a demo, so `lib/legal.ts` holds sample values and
       the pages show a demo notice. For a real launch set `DEMO_NOTICE` to

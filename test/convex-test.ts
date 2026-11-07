@@ -1,6 +1,5 @@
 import aggregateTest from "@convex-dev/aggregate/test";
 import rateLimiterTest from "@convex-dev/rate-limiter/test";
-import resendTest from "@convex-dev/resend/test";
 import { convexTest } from "convex-test";
 import schema from "../convex/schema";
 
@@ -25,7 +24,6 @@ type Modules = Record<string, () => Promise<unknown>>;
 export function newConvexTest(modules: Modules) {
 	const t = convexTest(schema, modules);
 	rateLimiterTest.register(t, "rateLimiter");
-	resendTest.register(t, "resend");
 	for (const name of FEEDBACK_AGGREGATES) aggregateTest.register(t, name);
 	return t;
 }

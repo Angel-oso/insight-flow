@@ -20,6 +20,7 @@ import type * as crons from "../crons.js";
 import type * as dashboard_health from "../dashboard/health.js";
 import type * as dashboard_overview from "../dashboard/overview.js";
 import type * as email_authGuards from "../email/authGuards.js";
+import type * as email_brevo from "../email/brevo.js";
 import type * as email_config from "../email/config.js";
 import type * as email_invitationTemplate from "../email/invitationTemplate.js";
 import type * as email_send from "../email/send.js";
@@ -99,6 +100,7 @@ declare const fullApi: ApiFromModules<{
   "dashboard/health": typeof dashboard_health;
   "dashboard/overview": typeof dashboard_overview;
   "email/authGuards": typeof email_authGuards;
+  "email/brevo": typeof email_brevo;
   "email/config": typeof email_config;
   "email/invitationTemplate": typeof email_invitationTemplate;
   "email/send": typeof email_send;
@@ -188,7 +190,6 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
-  resend: import("@convex-dev/resend/_generated/component.js").ComponentApi<"resend">;
   feedbackByReceived: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"feedbackByReceived">;
   feedbackByCompleted: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"feedbackByCompleted">;
   feedbackByStatus: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"feedbackByStatus">;
