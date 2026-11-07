@@ -5,6 +5,7 @@ import { ConvexError } from "convex/values";
 import { useMemo, useRef, useState } from "react";
 import { ChevronDown, Trash2 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
+import { TAXONOMY_OPTION_LIMITS } from "@/convex/taxonomies/limits";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -388,10 +389,24 @@ export function TaxonomyManager({ disabled, projectSlug }: { readonly disabled: 
 								variant="outline"
 								size="sm"
 								onClick={() => addRow(group.key)}
-								disabled={disabled || pendingKey === group.key}
+								disabled={
+									disabled ||
+									pendingKey === group.key ||
+									rows[group.key].length >= TAXONOMY_OPTION_LIMITS[group.key]
+								}
+								title={
+									rows[group.key].length >= TAXONOMY_OPTION_LIMITS[group.key]
+										? `Up to ${TAXONOMY_OPTION_LIMITS[group.key]} ${group.title.toLowerCase()}`
+										: undefined
+								}
 							>
 								Add {group.singular}
 							</Button>
+							{rows[group.key].length >= TAXONOMY_OPTION_LIMITS[group.key] ? (
+								<span className="text-xs text-muted-foreground">
+									Limit of {TAXONOMY_OPTION_LIMITS[group.key]} reached
+								</span>
+							) : null}
 							<Button
 								type="button"
 								size="sm"

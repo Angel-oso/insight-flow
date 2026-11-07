@@ -1,10 +1,10 @@
 "use client";
 
 import { useMutation } from "convex/react";
-import { ConvexError } from "convex/values";
 import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { errorMessage } from "@/components/common/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,7 +30,7 @@ export function CreateProject({ organizationId, organizationName }: { readonly o
 			setOpen(false);
 			router.push(projectPath(project.slug, "home"));
 		} catch (cause) {
-			setError(cause instanceof ConvexError ? cause.message : "Could not create the project. Try again.");
+			setError(errorMessage(cause, "Could not create the project. Try again."));
 		} finally { setBusy(false); }
 	}
 	return <>
@@ -42,6 +42,7 @@ export function CreateProject({ organizationId, organizationName }: { readonly o
 					<div className="space-y-5 px-4 py-2">
 						<label className="grid gap-2 text-sm font-medium">Project name<Input autoFocus required maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Partner portal" disabled={busy} /></label>
 						<label className="grid gap-2 text-sm font-medium">Description (optional)<Textarea maxLength={500} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What is this project for?" disabled={busy} /></label>
+						<p className="text-sm leading-6 text-muted-foreground">The public feedback link starts closed. Turn on <span className="font-medium text-foreground">Accept feedback</span> in the project&apos;s settings when you are ready to share it.</p>
 						{error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 					</div>
 					<SheetFooter><Button type="submit" disabled={busy || !name.trim()}>{busy ? "Creating project…" : "Create and open project"}</Button></SheetFooter>

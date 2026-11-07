@@ -4,6 +4,7 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
+import { errorMessage } from "@/components/common/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { api } from "@/convex/_generated/api";
@@ -37,9 +38,14 @@ export function AcceptInvitation({ token }: { readonly token: string }) {
 		setError(null);
 		try {
 			const result = await accept({ token });
-			router.replace(projectPath(result.projectSlug, "home"));
+			if (result.ok) {
+				router.replace(projectPath(result.projectSlug, "home"));
+				return;
+			}
+			setError(result.message);
+			setIsAccepting(false);
 		} catch (cause) {
-			setError(cause instanceof Error ? cause.message : "Could not accept this invitation.");
+			setError(errorMessage(cause, "Could not accept this invitation."));
 			setIsAccepting(false);
 		}
 	}

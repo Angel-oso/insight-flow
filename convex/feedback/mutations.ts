@@ -1,15 +1,35 @@
 import { ConvexError, v } from "convex/values";
 import { hasCapability } from "../../lib/auth/permissions";
+import type { Doc } from "../_generated/dataModel";
 import { mutation } from "../_generated/server";
 import { resolveProjectAccess } from "../access/roles";
 import { requireCapability, requireFeedback, requireProject } from "./access";
 import { insertFeedback } from "./create";
+import { patchFeedbackRow } from "./store";
+import { scheduleCriticalAlert } from "../notifications/critical";
+import { scheduleCriticalWebhook } from "../integrations/webhooks";
+import { enforceUserRateLimit } from "../rateLimits";
 import { getFinalStatuses, getTaxonomies } from "../taxonomies/lib";
 import schema from "../schema";
 
 const updateFields = schema.tables.feedback.validator
 	.pick("category", "priority", "status", "assigneeId")
 	.partial();
+
+/**
+ * completedAt follows open/final transitions only: set on open -> final,
+ * cleared on final -> open, kept on final -> final (moving "Completed" to
+ * "Discarded" is not a second completion).
+ */
+export function completedAtFor(
+	finals: ReadonlySet<string>,
+	item: Pick<Doc<"feedback">, "status" | "completedAt">,
+	nextStatus: string,
+	now: number,
+) {
+	if (!finals.has(nextStatus)) return undefined;
+	return finals.has(item.status) ? (item.completedAt ?? now) : now;
+}
 
 export const update = mutation({
 	args: {
@@ -19,6 +39,7 @@ export const update = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, { projectSlug, feedbackId, changes }) => {
+		await enforceUserRateLimit(ctx, "updateFeedback");
 		const { project, access, item } = await requireFeedback(
 			ctx,
 			projectSlug,
@@ -94,13 +115,17 @@ export const update = mutation({
 		}
 		if (!changed) return null;
 		const finals = await getFinalStatuses(ctx, project.organizationId);
-		await ctx.db.patch("feedback", feedbackId, {
+		await patchFeedbackRow(ctx, feedbackId, {
 			...changes,
 			updatedAt: now,
 			...(changes.status !== undefined && changes.status !== item.status
-				? { completedAt: finals.has(changes.status) ? now : undefined }
+				? { completedAt: completedAtFor(finals, item, changes.status, now) }
 				: {}),
 		});
+		if (changes.priority !== undefined && changes.priority !== item.priority) {
+			await scheduleCriticalAlert(ctx, feedbackId);
+			await scheduleCriticalWebhook(ctx, feedbackId);
+		}
 		return null;
 	},
 });
@@ -122,6 +147,7 @@ export const create = mutation({
 	},
 	returns: v.object({ feedbackId: v.id("feedback") }),
 	handler: async (ctx, { projectSlug, ...fields }) => {
+		await enforceUserRateLimit(ctx, "createFeedback");
 		const { project, access } = await requireProject(ctx, projectSlug);
 		requireCapability(access.permissions, "feedback.triage");
 		if (project.status === "Archived")
@@ -144,6 +170,7 @@ export const addComment = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, { projectSlug, feedbackId, body }) => {
+		await enforceUserRateLimit(ctx, "addComment");
 		const { project, access } = await requireFeedback(
 			ctx,
 			projectSlug,
@@ -170,7 +197,7 @@ export const addComment = mutation({
 			message: "Added an internal note",
 			createdAt: now,
 		});
-		await ctx.db.patch("feedback", feedbackId, { updatedAt: now });
+		await patchFeedbackRow(ctx, feedbackId, { updatedAt: now });
 		return null;
 	},
 });

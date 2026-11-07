@@ -3,6 +3,8 @@ import { PublicFeedbackForm } from "@/components/intake/public-feedback-form";
 
 export const metadata: Metadata = {
 	title: "Share feedback · InsightFlow",
+	// Each form belongs to a customer, who decides where to share it.
+	robots: { index: false },
 };
 
 export default async function FeedbackPage({ params }: {

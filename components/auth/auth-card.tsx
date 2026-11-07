@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
@@ -26,27 +25,5 @@ export function AuthCard({
 				{footer}
 			</div>
 		</Card>
-	);
-}
-
-export function AuthSwitchLink({
-	href,
-	action,
-	label,
-}: {
-	readonly href: string;
-	readonly action: string;
-	readonly label: string;
-}) {
-	return (
-		<p>
-			{action}{" "}
-			<Link
-				href={href}
-				className="font-medium text-primary underline-offset-4 hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-			>
-				{label}
-			</Link>
-		</p>
 	);
 }

@@ -82,6 +82,9 @@ export const assignUserAccess = internalMutation({
 		]);
 		if (!user || !organization) throw new ConvexError("User or organization not found.");
 		if (!roleNames.length) throw new ConvexError("Assign at least one role.");
+		// Invariant: the owner is always an organization administrator.
+		if (userId === organization.ownerId && !roleNames.includes("admin"))
+			throw new ConvexError("The organization owner must keep the admin role.");
 
 		const roleIds: Id<"roles">[] = [];
 		for (const name of new Set(roleNames)) {

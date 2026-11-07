@@ -25,9 +25,17 @@ function relativeTime(timestamp: number, now: number) {
 	return `${Math.floor(minutes / 1440)} days ago`;
 }
 
+/**
+ * A feedback row as the server returns it to members: `sender.email` is
+ * null when the viewer may not see submitter emails (no feedback.triage).
+ */
+export type FeedbackRecord = Omit<Doc<"feedback">, "sender"> & {
+	sender: { name: string; email: string | null } | null;
+};
+
 /** Presentation boundary: stored dates and IDs remain unchanged in Convex. */
 export function presentFeedback(
-	item: Doc<"feedback">,
+	item: FeedbackRecord,
 	project: string,
 	now: number,
 	finals: ReadonlySet<string>,
@@ -71,29 +79,27 @@ export type FeedbackActivity = {
 	tone: "neutral" | "primary" | "warning" | "success";
 };
 
-export function presentDiscussion(
-	data: {
-		comments: (Doc<"comments"> & { author: string })[];
-		activities: Doc<"activities">[];
-	},
+export function presentComments(
+	comments: readonly (Doc<"comments"> & { author: string })[],
 	now: number,
-) {
-	return {
-		comments: data.comments.map((comment) => ({
-			id: comment._id,
-			author: comment.author,
-			initials: initials(comment.author),
-			body: comment.body,
-			time: relativeTime(comment.createdAt, now),
-		})),
-		activities: data.activities.map((activity) => ({
-			id: activity._id,
-			message: activity.message,
-			time: relativeTime(activity.createdAt, now),
-			tone:
-				activity.type === "received"
-					? ("primary" as const)
-					: ("neutral" as const),
-		})),
-	};
+): FeedbackComment[] {
+	return comments.map((comment) => ({
+		id: comment._id,
+		author: comment.author,
+		initials: initials(comment.author),
+		body: comment.body,
+		time: relativeTime(comment.createdAt, now),
+	}));
+}
+
+export function presentActivities(
+	activities: readonly Doc<"activities">[],
+	now: number,
+): FeedbackActivity[] {
+	return activities.map((activity) => ({
+		id: activity._id,
+		message: activity.message,
+		time: relativeTime(activity.createdAt, now),
+		tone: activity.type === "received" ? "primary" : "neutral",
+	}));
 }

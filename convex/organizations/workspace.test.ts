@@ -1,8 +1,9 @@
-import { convexTest } from "convex-test";
+import { newConvexTest } from "../../test/convex-test";
 import { expect, test } from "vitest";
 import { api } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import schema from "../schema";
+import { insertFeedbackRow, patchFeedbackRow } from "../feedback/store";
 
 const modules = {
 	...Object.fromEntries(Object.entries(import.meta.glob("../**/*.ts")).map(([path, load]) => [path.replace(/^\.\.\//, "./"), load])),
@@ -13,7 +14,7 @@ const from = Date.UTC(2026, 3, 1);
 const to = from + 7 * day;
 
 async function fixture() {
-	const t = convexTest(schema, modules);
+	const t = newConvexTest(modules);
 	const ownerId = await t.run((ctx) => ctx.db.insert("users", { name: "Owner" }));
 	const owner = t.withIdentity({ subject: ownerId });
 	const { projectSlug } = await owner.mutation(api.setup.mutations.createWorkspace, { name: "Studio", projectName: "Portal" });
@@ -37,7 +38,7 @@ async function fixture() {
 		await ctx.db.insert("projectMembers", { projectId: project._id, userId: outsider, roleId: adminRole, joinedAt: from });
 		const otherProject = await ctx.db.insert("projects", { organizationId, name: "Backlog", slug: "backlog", description: "Private", status: "Active", inboxEnabled: true, defaultPriority: "Medium", criticalAlerts: false, weeklyDigest: false });
 		const emptyProject = await ctx.db.insert("projects", { organizationId, name: "Empty", slug: "empty", description: "Empty", status: "Paused", inboxEnabled: true, defaultPriority: "Medium", criticalAlerts: false, weeklyDigest: false });
-		const add = (projectId: Id<"projects">, priority: string, receivedAt: number, status = "New", completedAt?: number) => ctx.db.insert("feedback", { projectId, title: "Item", description: "Item", priority, receivedAt, updatedAt: receivedAt, status, completedAt, assigneeId: null, sender: null, category: "Bug" });
+		const add = (projectId: Id<"projects">, priority: string, receivedAt: number, status = "New", completedAt?: number) => insertFeedbackRow(ctx, { projectId, title: "Item", description: "Item", priority, receivedAt, updatedAt: receivedAt, status, completedAt, assigneeId: null, sender: null, category: "Bug" });
 		await add(project._id, "Critical", from);
 		await add(project._id, "Low", from - day, "Completed", from + day);
 		await add(project._id, "Low", from - 2 * day, "Discarded", from + day);
@@ -92,7 +93,7 @@ test("valid windows, noncritical backlog attention, bounded projects and feedbac
 	expect((await owner.query(api.organizations.queries.overview, { ...args, to: from + 365 * day })).admin).not.toBeNull();
 	await t.run(async (ctx) => {
 		const feedback = await ctx.db.query("feedback").withIndex("by_projectId_receivedAt", (q) => q.eq("projectId", ids.projectId)).take(10);
-		await ctx.db.patch("feedback", feedback.find((f) => f.priority === "Critical")!._id, { priority: "High" });
+		await patchFeedbackRow(ctx, feedback.find((f) => f.priority === "Critical")!._id, { priority: "High" });
 	});
 	expect((await owner.query(api.organizations.queries.overview, args)).admin?.health.find((p) => p.slug === "portal")).toMatchObject({ critical: 0, health: "Needs attention" });
 	await t.run(async (ctx) => {
@@ -116,21 +117,26 @@ test("activity is bounded to latest 15 and project links honor pinned roles", as
 	expect((await t.withIdentity({ subject: ids.member }).query(api.organizations.queries.overview, args)).projects.map((p) => p.slug)).toEqual(["portal"]);
 });
 
-test("feedback cap is explicit for admins, while members never read unlinked project feedback", async () => {
+test("projects past 200 items keep exact admin counts, while members never read unlinked project feedback", async () => {
 	const { t, owner, ids, args } = await fixture();
 	await t.run(async (ctx) => {
-		for (let i = 0; i < 181; i++) await ctx.db.insert("feedback", { projectId: ids.otherProject, title: "Overflow", description: "Overflow", category: "Bug", priority: "Low", status: "New", assigneeId: null, sender: null, receivedAt: from, updatedAt: from });
+		for (let i = 0; i < 230; i++) await insertFeedbackRow(ctx, { projectId: ids.otherProject, title: "Overflow", description: "Overflow", category: "Bug", priority: "Low", status: "New", assigneeId: null, sender: null, receivedAt: from, updatedAt: from });
 	});
-	await expect(owner.query(api.organizations.queries.overview, args)).rejects.toThrow(/200 feedback items/i);
+	const result = await owner.query(api.organizations.queries.overview, args);
+	expect(result.admin?.health.find((p) => p.slug === "backlog")).toMatchObject({ open: 250, total: 250, received: 250, health: "At risk" });
+	expect(result.admin?.metrics).toMatchObject({ total: 255, open: 252 });
 	expect((await t.withIdentity({ subject: ids.member }).query(api.organizations.queries.overview, args)).admin).toBeNull();
-});
+}, 60_000);
 
-test("onboarding independently enforces unique organization and project slugs without partial writes", async () => {
+test("onboarding keeps organization and project slugs globally unique by suffixing collisions", async () => {
 	const { t, owner } = await fixture();
-	for (const args of [{ name: "Studio", projectName: "Different" }, { name: "Different", projectName: "Portal" }]) {
-		await expect(owner.mutation(api.setup.mutations.createWorkspace, args)).rejects.toThrow(/already in use/i);
-	}
-	expect(await t.run((ctx) => ctx.db.query("organizations").take(10))).toHaveLength(1);
+	await owner.mutation(api.setup.mutations.createWorkspace, { name: "Studio", projectName: "Different" });
+	const slugs = async () => (await owner.query(api.organizations.queries.mine, {})).map((org) => org.slug);
+	expect(await slugs()).toEqual(["studio", expect.stringMatching(/^studio-[a-z0-9]{4}$/)]);
+	const project = await owner.mutation(api.setup.mutations.createWorkspace, { name: "Another", projectName: "Portal" });
+	expect(project.projectSlug).toMatch(/^portal-[a-z0-9]{4}$/);
+	expect((await slugs())[2]).toBe("another");
+	expect(await t.run((ctx) => ctx.db.query("organizations").take(10))).toHaveLength(3);
 });
 
 test("rename and settings require organization administration; only owner can transfer to eligible admin", async () => {
@@ -179,7 +185,7 @@ test("organization-only administrators can enter the shell without a project lin
 });
 
 test.each([{ name: "", projectName: "Valid" }, { name: "Valid", projectName: " " }, { name: "Valid", projectName: "a".repeat(81) }])("onboarding validates both names atomically %j", async (args) => {
-	const t = convexTest(schema, modules);
+	const t = newConvexTest(modules);
 	const userId = await t.run((ctx) => ctx.db.insert("users", { name: "New" }));
 	await expect(t.withIdentity({ subject: userId }).mutation(api.setup.mutations.createWorkspace, args)).rejects.toThrow(/1 and 80/i);
 	expect(await t.run((ctx) => ctx.db.query("organizations").take(1))).toEqual([]);

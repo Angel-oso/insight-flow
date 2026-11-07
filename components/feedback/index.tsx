@@ -2,11 +2,10 @@
 
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { finalStatusValues } from "@/lib/taxonomy";
 import { FeedbackHeader } from "./feedback-header";
 import { FeedbackSummary } from "./feedback-summary";
 import { FeedbackWorkspace } from "./feedback-workspace";
-import { initials, presentFeedback } from "./model";
+import { initials } from "./model";
 import { useFeedbackClock } from "./use-feedback";
 
 function FeedbackContent({ projectSlug }: { readonly projectSlug: string }) {
@@ -20,10 +19,6 @@ function FeedbackContent({ projectSlug }: { readonly projectSlug: string }) {
 				Loading feedback…
 			</p>
 		);
-	const finals = finalStatusValues(data.taxonomies);
-	const items = data.items.map((item) =>
-		presentFeedback(item, data.project.name, now, finals),
-	);
 	const assignees = data.assignees.map((user) => {
 		const name = user.name ?? "Former member";
 		return { id: user._id, name, initials: initials(name) };
@@ -32,14 +27,15 @@ function FeedbackContent({ projectSlug }: { readonly projectSlug: string }) {
 		<div className="mx-auto w-full max-w-[1520px] px-4 py-7 sm:px-6 sm:py-9 lg:px-8 xl:px-10 xl:py-10">
 			<FeedbackHeader project={data.project} />
 			<div className="mt-7 space-y-6">
-				<FeedbackSummary items={items} taxonomies={data.taxonomies} />
+				<FeedbackSummary summary={data.summary} taxonomies={data.taxonomies} />
 				<FeedbackWorkspace
-					items={items}
 					project={data.project}
 					role={data.role}
 					grantedPermissions={data.permissions}
 					assignees={assignees}
 					taxonomies={data.taxonomies}
+					totalItems={data.summary.total}
+					laneRank={data.summary.laneRank}
 					now={now}
 					archived={data.project.status === "Archived"}
 					viewerId={viewer?.id ?? null}

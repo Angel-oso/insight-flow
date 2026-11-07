@@ -1,4 +1,4 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
+import { getSessionUserId } from "../feedback/access";
 import { v } from "convex/values";
 import { query } from "../_generated/server";
 import { hasCapability } from "../../lib/auth/permissions";
@@ -18,7 +18,7 @@ export const status = query({
 		canCreateWorkspace: v.boolean(),
 	}),
 	handler: async (ctx) => {
-		const userId = await getAuthUserId(ctx);
+		const userId = await getSessionUserId(ctx);
 		if (!userId) {
 			return { authenticated: false, hasMembership: false, canCreateWorkspace: false };
 		}

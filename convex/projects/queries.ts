@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { hasCapability } from "../../lib/auth/permissions";
 import { resolveProjectAccess } from "../access/roles";
 import type { Doc } from "../_generated/dataModel";
@@ -11,6 +11,14 @@ const projectSummary = v.object({
 	description: v.string(),
 });
 
+/** Projects listed at once. */
+const PROJECT_LIST_LIMIT = 100;
+/**
+ * Project links read for the caller. Larger than the list limit because
+ * links to projects being deleted (kept for 7 days) are skipped, not counted.
+ */
+const LINK_READ_LIMIT = 200;
+
 /** Projects the caller can enter, constrained to their organization. */
 export const list = query({
 	args: {},
@@ -20,12 +28,17 @@ export const list = query({
 		const links = await ctx.db
 			.query("projectMembers")
 			.withIndex("by_userId", (q) => q.eq("userId", userId))
-			.take(101);
+			.take(LINK_READ_LIMIT + 1);
+		if (links.length > LINK_READ_LIMIT)
+			throw new ConvexError(
+				`You belong to too many projects to list here (up to ${PROJECT_LIST_LIMIT}). Leave a few projects you no longer use.`,
+			);
 		const visible = (
 			await Promise.all(
 				links.map(async (link) => {
 					const project = await ctx.db.get("projects", link.projectId);
-					if (!project) return null;
+					// Skipped cheaply; resolveProjectAccess would refuse it anyway.
+					if (!project || project.deletionRequestedAt !== undefined) return null;
 					const projectAccess = await resolveProjectAccess(ctx, userId, project._id);
 					return projectAccess &&
 						hasCapability(projectAccess.permissions, "project.view") &&
@@ -35,8 +48,10 @@ export const list = query({
 				}),
 			)
 		).filter((project): project is Doc<"projects"> => project !== null);
-		if (visible.length > 100)
-			throw new Error("This workspace supports up to 100 projects.");
+		if (visible.length > PROJECT_LIST_LIMIT)
+			throw new ConvexError(
+				`You can see up to ${PROJECT_LIST_LIMIT} projects here. Leave a few projects you no longer use.`,
+			);
 		return visible
 			.map((project) => ({
 				slug: project.slug,

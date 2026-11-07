@@ -1,10 +1,16 @@
 "use client";
 
+import * as Sentry from "@sentry/nextjs";
 import Link from "next/link";
+import { useEffect } from "react";
 import { ConvexError } from "convex/values";
 import { Button } from "@/components/ui/button";
 
 export default function WorkspaceError({ error, reset }: { readonly error: Error & { digest?: string }; readonly reset: () => void }) {
+	useEffect(() => {
+		// Expected access errors (ConvexError with a message) are not bugs.
+		if (!(error instanceof ConvexError)) Sentry.captureException(error);
+	}, [error]);
 	const message = error instanceof ConvexError && typeof error.data === "string"
 		? error.data
 		: "Could not load this workspace. Try again or return to your default organization.";

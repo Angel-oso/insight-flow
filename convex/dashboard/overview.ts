@@ -3,7 +3,14 @@ import { hasCapability } from "../../lib/auth/permissions";
 import { resolveProjectAccess } from "../access/roles";
 import { query } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { listProjectFeedback, requireProject } from "../feedback/access";
+import { PROJECT_MEMBER_LIMIT, requireProject } from "../feedback/access";
+import {
+	assigneeCompletedIn,
+	assigneeWorkload,
+	categoryCounts,
+	projectBacklog,
+	windowCounts,
+} from "../feedback/aggregates";
 import {
 	getFinalStatuses,
 	getPriorityRanks,
@@ -15,6 +22,12 @@ import { projectHealth } from "./health";
 
 const dayMs = 24 * 60 * 60 * 1000;
 const staleDays = 7;
+/** Rows shown in (and read per bucket for) the needs-intervention queue. */
+const ATTENTION_LIMIT = 10;
+/** Personal open items listed on the overview. */
+const MINE_OPEN_LIMIT = 8;
+/** Recently updated personal items checked for new comments. */
+const COMMENT_SCAN_LIMIT = 100;
 
 const statusField = schema.tables.feedback.validator.fields.status;
 const categoryField = schema.tables.feedback.validator.fields.category;
@@ -154,104 +167,75 @@ export const get = query({
 		const finals = await getFinalStatuses(ctx, project.organizationId);
 		const priorityRank = await getPriorityRanks(ctx, project.organizationId);
 		const rankOf = (priority: string) => priorityRank.get(priority) ?? 0;
+		const openStatuses = taxonomies.statuses
+			.map((entry) => entry.value)
+			.filter((status) => !finals.has(status));
+		const priorityValues = taxonomies.priorities.map((entry) => entry.value);
 
-		const inRange = (timestamp: number, start: number, end: number) =>
-			timestamp >= start && timestamp < end;
-
-		// Full project listing (bounded, shared cap) for open/critical/
-		// categories/attention/health aggregates.
-		const items = await listProjectFeedback(ctx, projectId);
-
-		// Index-driven window counts for received vs. resolved movement.
-		const receivedInRange = await ctx.db
-			.query("feedback")
-			.withIndex("by_projectId_receivedAt", (q) =>
-				q.eq("projectId", projectId).gte("receivedAt", rangeStart).lt("receivedAt", to),
-			)
-			.take(201);
-		const receivedPrevious = await ctx.db
-			.query("feedback")
-			.withIndex("by_projectId_receivedAt", (q) =>
-				q
-					.eq("projectId", projectId)
-					.gte("receivedAt", previousStart)
-					.lt("receivedAt", rangeStart),
-			)
-			.take(201);
-		const resolvedInRange = await ctx.db
-			.query("feedback")
-			.withIndex("by_projectId_completedAt", (q) =>
-				q.eq("projectId", projectId).gte("completedAt", rangeStart).lt("completedAt", to),
-			)
-			.take(201);
-		const resolvedPrevious = await ctx.db
-			.query("feedback")
-			.withIndex("by_projectId_completedAt", (q) =>
-				q
-					.eq("projectId", projectId)
-					.gte("completedAt", previousStart)
-					.lt("completedAt", rangeStart),
-			)
-			.take(201);
-
-		// Daily buckets for the movement chart.
-		const receivedByDay = new Map<number, number>();
-		for (const item of receivedInRange) {
-			const dayStart = rangeStart + Math.floor((item.receivedAt - rangeStart) / dayMs) * dayMs;
-			receivedByDay.set(dayStart, (receivedByDay.get(dayStart) ?? 0) + 1);
-		}
-		const resolvedByDay = new Map<number, number>();
-		for (const item of resolvedInRange) {
-			if (item.completedAt === undefined) continue;
-			const dayStart = rangeStart + Math.floor((item.completedAt - rangeStart) / dayMs) * dayMs;
-			resolvedByDay.set(dayStart, (resolvedByDay.get(dayStart) ?? 0) + 1);
-		}
-		const trend = Array.from({ length: Math.ceil((to - from) / dayMs) }, (_, index) => {
-			const dayStart = rangeStart + index * dayMs;
-			return {
-				dayStart,
-				received: receivedByDay.get(dayStart) ?? 0,
-				resolved: resolvedByDay.get(dayStart) ?? 0,
-			};
-		});
-
-		// Status distribution in taxonomy rank order, one bounded indexed
-		// read per lane.
-		const statusOrder = [...taxonomies.statuses]
-			.sort((a, b) => a.rank - b.rank)
-			.map((entry) => entry.value);
-		const statuses = await Promise.all(
-			statusOrder.map(async (status) => {
-				const rows = await ctx.db
-					.query("feedback")
-					.withIndex("by_projectId_status", (q) =>
-						q.eq("projectId", projectId).eq("status", status),
-					)
-					.take(201);
-				return { status, count: rows.length };
-			}),
-		);
-
-		let open = 0;
-		let critical = 0;
-		let criticalUnassigned = 0;
-		let completed = 0;
-		let lastActivityAt: number | null = null;
+		// Counts come from aggregates (O(log n)), never from reading rows.
+		const backlog = await projectBacklog(ctx, projectId, taxonomies, finals);
 		// Critical lane = highest rank present in the open backlog, so an
-		// unused higher rank never zeroes the counters. Attention covers the
-		// top three present lanes.
-		let laneRank = -1;
-		for (const item of items) {
-			if (finals.has(item.status)) continue;
-			laneRank = Math.max(laneRank, rankOf(item.priority));
-		}
-		const laneLabel =
-			taxonomies.priorities.find((entry) => entry.rank === laneRank)?.label ??
-			null;
-		const laneColor =
-			taxonomies.priorities.find((entry) => entry.rank === laneRank)?.color ??
-			null;
-		const categoryCounts = new Map<string, number>();
+		// unused higher rank never zeroes the counters.
+		const laneRank = backlog.laneRank;
+		const lanePriority = taxonomies.priorities.find((entry) => entry.rank === laneRank);
+		const open = backlog.open;
+		const critical = laneRank < 0 ? 0 : backlog.openAtRank(laneRank);
+		const unassignedLane = await assigneeWorkload(ctx, projectId, [null], taxonomies, finals, [
+			new Set([laneRank]),
+		]);
+		const criticalUnassigned = unassignedLane.get(null)?.ranked[0] ?? 0;
+
+		// Half-open windows: current, previous, then one bucket per day.
+		const days = Array.from({ length: Math.ceil((to - from) / dayMs) }, (_, index) => {
+			const dayStart = rangeStart + index * dayMs;
+			return { start: dayStart, end: Math.min(dayStart + dayMs, to) };
+		});
+		const windows = await windowCounts(ctx, projectId, [
+			{ start: rangeStart, end: to },
+			{ start: previousStart, end: rangeStart },
+			...days,
+		]);
+		const trend = days.map((window, index) => ({
+			dayStart: window.start,
+			received: windows.received[index + 2],
+			resolved: windows.completed[index + 2],
+		}));
+
+		// Status distribution in taxonomy rank order.
+		const statuses = [...taxonomies.statuses]
+			.sort((a, b) => a.rank - b.rank)
+			.map((entry) => ({ status: entry.value, count: backlog.byStatus.get(entry.value) ?? 0 }));
+		const categories = (
+			await categoryCounts(ctx, projectId, taxonomies.categories.map((entry) => entry.value))
+		).slice(0, 5);
+
+		// Needs-intervention queue: a bounded read per open status×priority
+		// bucket (oldest activity first, plus the oldest unassigned), then
+		// the same ranking as before over that candidate set.
+		const buckets = await Promise.all(
+			openStatuses.flatMap((status) =>
+				priorityValues.flatMap((priority) => [
+					ctx.db
+						.query("feedback")
+						.withIndex("by_projectId_status_priority_updatedAt", (q) =>
+							q.eq("projectId", projectId).eq("status", status).eq("priority", priority),
+						)
+						.take(ATTENTION_LIMIT),
+					ctx.db
+						.query("feedback")
+						.withIndex("by_projectId_assigneeId_status_priority_receivedAt", (q) =>
+							q
+								.eq("projectId", projectId)
+								.eq("assigneeId", null)
+								.eq("status", status)
+								.eq("priority", priority),
+						)
+						.take(ATTENTION_LIMIT),
+				]),
+			),
+		);
+		const candidates = new Map<Id<"feedback">, Doc<"feedback">>();
+		for (const item of buckets.flat()) candidates.set(item._id, item);
 		type AttentionCandidate = {
 			id: Id<"feedback">;
 			title: string;
@@ -261,18 +245,8 @@ export const get = query({
 			rank: number;
 		};
 		const attentionCandidates: AttentionCandidate[] = [];
-		for (const item of items) {
-			if (item.updatedAt > (lastActivityAt ?? 0)) lastActivityAt = item.updatedAt;
-			categoryCounts.set(item.category, (categoryCounts.get(item.category) ?? 0) + 1);
-			if (!isOpen(item, finals)) {
-				if (finals.has(item.status)) completed += 1;
-				continue;
-			}
-			open += 1;
-			if (rankOf(item.priority) === laneRank) {
-				critical += 1;
-				if (item.assigneeId === null) criticalUnassigned += 1;
-			}
+		for (const item of candidates.values()) {
+			if (!isOpen(item, finals)) continue;
 			const stale = to - item.updatedAt >= staleDays * dayMs;
 			const needsAttention =
 				rankOf(item.priority) >= laneRank - 2 ||
@@ -299,7 +273,7 @@ export const get = query({
 				Number(a.reason !== "Unassigned") - Number(b.reason !== "Unassigned") ||
 				a.updatedAt - b.updatedAt,
 		);
-		const attention = attentionCandidates.slice(0, 10).map((candidate) => ({
+		const attention = attentionCandidates.slice(0, ATTENTION_LIMIT).map((candidate) => ({
 			id: candidate.id,
 			title: candidate.title,
 			priority: candidate.priority,
@@ -307,10 +281,12 @@ export const get = query({
 			updatedAt: candidate.updatedAt,
 		}));
 
-		const categories = [...categoryCounts.entries()]
-			.map(([category, count]) => ({ category, count }))
-			.sort((a, b) => b.count - a.count)
-			.slice(0, 5);
+		const [latestUpdate] = await ctx.db
+			.query("feedback")
+			.withIndex("by_projectId_updatedAt", (q) => q.eq("projectId", projectId))
+			.order("desc")
+			.take(1);
+		const lastActivityAt = latestUpdate?.updatedAt ?? null;
 
 		const activityRows = await ctx.db
 			.query("activities")
@@ -339,54 +315,93 @@ export const get = query({
 		);
 
 		// Personal work spans the current backlog; only completions use the window.
-		const assigned = await ctx.db.query("feedback")
-			.withIndex("by_projectId_assigneeId", (q) => q.eq("projectId", projectId).eq("assigneeId", access.user._id))
-			.take(201);
-		const mineOpen = assigned.filter((item) => isOpen(item, finals))
-			.sort((a, b) => rankOf(b.priority) - rankOf(a.priority) || a.receivedAt - b.receivedAt);
+		const viewerId = access.user._id;
 		const taxonomyRanks = [...new Set(taxonomies.priorities.map((priority) => priority.rank))].sort((a, b) => b - a);
 		const urgentRanks = new Set(taxonomyRanks.slice(0, 2));
-		const commentUpdates = await Promise.all(mineOpen.map(async (item) => {
+		const myWorkload = (
+			await assigneeWorkload(ctx, projectId, [viewerId], taxonomies, finals, [urgentRanks])
+		).get(viewerId);
+		// Top personal items: highest priority, then oldest. Each status×priority
+		// bucket only needs its oldest MINE_OPEN_LIMIT rows to fill the list.
+		const myBuckets = await Promise.all(
+			openStatuses.flatMap((status) =>
+				priorityValues.map((priority) =>
+					ctx.db
+						.query("feedback")
+						.withIndex("by_projectId_assigneeId_status_priority_receivedAt", (q) =>
+							q
+								.eq("projectId", projectId)
+								.eq("assigneeId", viewerId)
+								.eq("status", status)
+								.eq("priority", priority),
+						)
+						.take(MINE_OPEN_LIMIT),
+				),
+			),
+		);
+		const mineOpen = myBuckets
+			.flat()
+			.sort((a, b) => rankOf(b.priority) - rankOf(a.priority) || a.receivedAt - b.receivedAt)
+			.slice(0, MINE_OPEN_LIMIT);
+		// New comments surface on recently updated work (notes bump updatedAt).
+		const recentlyUpdated = (
+			await ctx.db
+				.query("feedback")
+				.withIndex("by_projectId_assigneeId_updatedAt", (q) =>
+					q.eq("projectId", projectId).eq("assigneeId", viewerId),
+				)
+				.order("desc")
+				.take(COMMENT_SCAN_LIMIT)
+		).filter((item) => isOpen(item, finals));
+		const commentUpdates = await Promise.all(recentlyUpdated.map(async (item) => {
 			const [latest] = await ctx.db.query("comments")
 				.withIndex("by_feedbackId_createdAt", (q) => q.eq("feedbackId", item._id))
 				.order("desc").take(1);
-			if (!latest || latest.authorId === access.user._id) return null;
+			if (!latest || latest.authorId === viewerId) return null;
 			// The newest comment is from someone else. Only an own comment at
 			// the exact same instant can prevent it from being strictly newer.
 			const [ownAtSameTime] = await ctx.db.query("comments")
 				.withIndex("by_feedbackId_createdAt", (q) => q.eq("feedbackId", item._id).eq("createdAt", latest.createdAt))
-				.filter((q) => q.eq(q.field("authorId"), access.user._id)).take(1);
+				.filter((q) => q.eq(q.field("authorId"), viewerId)).take(1);
 			return ownAtSameTime ? null : { id: item._id, title: item.title, latestCommentAt: latest.createdAt };
 		}));
 		const mine = {
-			open: mineOpen.slice(0, 8).map((item) => ({
+			open: mineOpen.map((item) => ({
 				id: item._id, title: item.title, priority: item.priority, status: item.status,
 				receivedAt: item.receivedAt, updatedAt: item.updatedAt,
 			})),
-			openCount: mineOpen.length,
-			urgentCount: mineOpen.filter((item) => urgentRanks.has(rankOf(item.priority))).length,
-			completedInRange: assigned.filter((item) => item.completedAt !== undefined && inRange(item.completedAt, from, to)).length,
+			openCount: myWorkload?.open ?? 0,
+			urgentCount: myWorkload?.ranked[0] ?? 0,
+			completedInRange: await assigneeCompletedIn(ctx, projectId, viewerId, from, to),
 			withNewComments: commentUpdates.filter((item) => item !== null)
 				.sort((a, b) => b.latestCommentAt - a.latestCommentAt).slice(0, 5),
 		};
 		let workload: { name: string; initials: string; openAssigned: number; criticalAssigned: number }[] | null = null;
 		if (hasCapability(access.permissions, "feedback.assign")) {
 			const links = await ctx.db.query("projectMembers")
-				.withIndex("by_projectId_userId", (q) => q.eq("projectId", projectId)).take(201);
-			if (links.length > 200) throw new ConvexError("This overview supports up to 200 project members.");
-			const rows = await Promise.all(links.map(async (link) => {
+				.withIndex("by_projectId_userId", (q) => q.eq("projectId", projectId)).take(PROJECT_MEMBER_LIMIT + 1);
+			if (links.length > PROJECT_MEMBER_LIMIT)
+				throw new ConvexError(`This overview supports up to ${PROJECT_MEMBER_LIMIT} project members.`);
+			const members = (await Promise.all(links.map(async (link) => {
 				const memberAccess = await resolveProjectAccess(ctx, link.userId, projectId);
 				if (!memberAccess || !hasCapability(memberAccess.permissions, "feedback.view")) return null;
-				const memberOpen = items.filter((item) => item.assigneeId === link.userId && isOpen(item, finals));
-				const name = memberAccess.user.name ?? "Team member";
+				return { id: link.userId, name: memberAccess.user.name ?? "Team member" };
+			}))).filter((member) => member !== null);
+			const counts = await assigneeWorkload(
+				ctx, projectId, members.map((member) => member.id), taxonomies, finals,
+				[new Set(taxonomyRanks.slice(0, 1))],
+			);
+			workload = members.map((member) => {
+				const row = counts.get(member.id);
 				return {
-					name, initials: initials(name),
-					openAssigned: memberOpen.length,
-					criticalAssigned: memberOpen.filter((item) => rankOf(item.priority) === taxonomyRanks[0]).length,
+					name: member.name, initials: initials(member.name),
+					openAssigned: row?.open ?? 0,
+					criticalAssigned: row?.ranked[0] ?? 0,
 				};
-			}));
-			workload = rows.filter((row) => row !== null).sort((a, b) => b.openAssigned - a.openAssigned || a.name.localeCompare(b.name));
+			}).sort((a, b) => b.openAssigned - a.openAssigned || a.name.localeCompare(b.name));
 		}
+		// Health uses the taxonomy's top rank (shared rule with the org overview).
+		const topRank = Math.max(0, ...priorityRank.values());
 
 		return {
 			viewer: { role: access.role, permissions: access.permissions },
@@ -394,35 +409,29 @@ export const get = query({
 			workload,
 			project: { name: project.name, slug: project.slug, status: project.status },
 			metrics: {
-				received: receivedInRange.filter((item) =>
-					inRange(item.receivedAt, rangeStart, to),
-				).length,
-				receivedPrevious: receivedPrevious.length,
+				received: windows.received[0],
+				receivedPrevious: windows.received[1],
 				open,
 				critical,
 				criticalUnassigned,
-				criticalLabel: laneLabel,
-				criticalColor: laneColor,
-				completedInRange: resolvedInRange.filter(
-					(item) =>
-						item.completedAt !== undefined &&
-						inRange(item.completedAt, rangeStart, to),
-				).length,
-				completedPrevious: resolvedPrevious.length,
-				total: items.length,
+				criticalLabel: lanePriority?.label ?? null,
+				criticalColor: lanePriority?.color ?? null,
+				completedInRange: windows.completed[0],
+				completedPrevious: windows.completed[1],
+				total: backlog.total,
 			},
 			trend,
 			statuses,
 			categories,
 			attention,
 			health: {
-				received: items.length,
+				received: backlog.total,
 				open,
 				critical,
-				completed,
-				total: items.length,
+				completed: backlog.completed,
+				total: backlog.total,
 				lastActivityAt,
-				status: projectHealth(items, finals, priorityRank).status,
+				status: projectHealth({ open, critical: backlog.openAtRank(topRank) }).status,
 			},
 			activities,
 			taxonomies,

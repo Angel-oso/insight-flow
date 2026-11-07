@@ -1,11 +1,11 @@
 "use client";
 
 import { Check, ChevronsUpDown, FolderKanban, Plus } from "lucide-react";
-import { ConvexError } from "convex/values";
 import { useMutation, useQuery } from "convex/react";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
+import { errorMessage } from "@/components/common/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -104,11 +104,7 @@ export function ProjectSwitcher({ project }: { readonly project?: Project }) {
 			setDescription("");
 			selectProject(createdProject.slug);
 		} catch (cause) {
-			setCreateError(
-				cause instanceof ConvexError
-					? cause.message
-					: "Could not create the project. Try again.",
-			);
+			setCreateError(errorMessage(cause, "Could not create the project. Try again."));
 		} finally {
 			setIsCreating(false);
 		}
@@ -220,6 +216,11 @@ export function ProjectSwitcher({ project }: { readonly project?: Project }) {
 									placeholder="What is this project for?"
 								/>
 							</label>
+							<p className="text-sm leading-6 text-muted-foreground">
+								The public feedback link starts closed. Turn on{" "}
+								<span className="font-medium text-foreground">Accept feedback</span>{" "}
+								in the project&apos;s settings when you are ready to share it.
+							</p>
 							{createError ? (
 								<p role="alert" className="text-sm text-destructive">
 									{createError}

@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Superseded PR runs are cancelled; every push to main is verified.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  verify:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Placeholder backend so the client bundle builds; CI never talks to it.
+      NEXT_PUBLIC_CONVEX_URL: https://placeholder-ci-123.convex.cloud
+      NEXT_PUBLIC_CONVEX_SITE_URL: https://placeholder-ci-123.convex.site
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # Version comes from "packageManager" (pnpm@10.4.1) in package.json.
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Reports production dependency advisories without blocking the build;
+      # review new ones in the job log.
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high
+        continue-on-error: true
+
+      - name: Lint
+        run: pnpm lint
+
+      # Global route types (PageProps, LayoutProps, typed links) and
+      # next-env.d.ts live in the gitignored .next/ and next-env.d.ts, so a
+      # clean checkout must generate them before tsc. (typecheck:app also
+      # runs typegen, so the script works on its own locally.)
+      - name: Generate Next.js route types
+        run: pnpm exec next typegen
+
+      - name: Typecheck (app)
+        run: pnpm typecheck:app
+
+      - name: Typecheck (Convex)
+        run: pnpm typecheck:convex
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build

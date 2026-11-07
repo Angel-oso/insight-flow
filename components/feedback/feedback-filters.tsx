@@ -95,8 +95,10 @@ export function FeedbackFilters({
 	onReset,
 	page,
 	pageCount,
+	hasMore,
+	loadingMore = false,
 	pageSize,
-	totalItems,
+	loadedItems,
 	onPageChange,
 	canFilterMine,
 }: {
@@ -106,11 +108,17 @@ export function FeedbackFilters({
 	readonly onFiltersChange: (filters: FeedbackFiltersState) => void;
 	readonly onReset: () => void;
 	readonly page: number;
+	/** Pages of items loaded so far. */
 	readonly pageCount: number;
+	/** The server has more matching items beyond the loaded pages. */
+	readonly hasMore: boolean;
+	/** The next batch is being fetched; paging past the loaded pages waits for it. */
+	readonly loadingMore?: boolean;
 	readonly pageSize: number;
-	readonly totalItems: number;
+	readonly loadedItems: number;
 	readonly onPageChange: (page: number) => void;
 }) {
+	const more = hasMore ? "+" : "";
 	const hasActiveFilters =
 		filters.query.length > 0 ||
 		filters.status !== "All statuses" ||
@@ -132,7 +140,7 @@ export function FeedbackFilters({
 						onChange={(event) =>
 							onFiltersChange({ ...filters, query: event.target.value })
 						}
-						placeholder="Search title or sender"
+						placeholder="Search titles"
 					/>
 				</div>
 				<div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-2 @2xl:flex-1 @2xl:justify-end">
@@ -220,11 +228,12 @@ export function FeedbackFilters({
 							Clear
 						</Button>
 					) : null}
-					{pageCount > 1 ? (
+					{pageCount > 1 || hasMore ? (
 						<div className="flex shrink-0 items-center gap-1 @2xl:ml-1 @2xl:border-l @2xl:border-border @2xl:pl-2">
 							<span className="mr-1 text-xs text-muted-foreground">
-								{(page - 1) * pageSize + 1}–
-								{Math.min(page * pageSize, totalItems)} of {totalItems}
+								{Math.min((page - 1) * pageSize + 1, loadedItems)}–
+								{Math.min(page * pageSize, loadedItems)} of {loadedItems}
+								{more}
 							</span>
 							<Button
 								type="button"
@@ -239,12 +248,13 @@ export function FeedbackFilters({
 							</Button>
 							<span className="min-w-14 text-center text-xs text-muted-foreground">
 								{page}/{pageCount}
+								{more}
 							</span>
 							<Button
 								type="button"
 								variant="ghost"
 								size="icon-sm"
-								disabled={page === pageCount}
+								disabled={page >= pageCount && (!hasMore || loadingMore)}
 								onClick={() => onPageChange(page + 1)}
 								aria-label="Next page"
 								title="Next page"

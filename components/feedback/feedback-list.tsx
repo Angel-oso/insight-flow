@@ -69,22 +69,39 @@ function FeedbackTitle({ item }: { readonly item: FeedbackItem }) {
 
 export function FeedbackList({
 	items,
+	loading = false,
 	selectedId,
 	assignees,
 	taxonomies,
 	onSelect,
 	renderDetail,
+	selection,
 }: {
 	readonly items: readonly FeedbackItem[];
+	/** A server page is still loading (nothing to show for this page yet). */
+	readonly loading?: boolean;
 	readonly selectedId: FeedbackItem["id"] | null;
 	readonly assignees: readonly Assignee[];
 	readonly taxonomies: Taxonomies;
 	readonly onSelect: (id: FeedbackItem["id"]) => void;
 	readonly renderDetail: (item: FeedbackItem) => React.ReactNode;
+	/** Multi-select checkboxes (bulk delete); omitted when not allowed. */
+	readonly selection?: {
+		readonly checked: ReadonlySet<string>;
+		readonly onToggle: (id: FeedbackItem["id"]) => void;
+	};
 }) {
 	const assigneeById = new Map<string, Assignee>(
 		assignees.map((assignee) => [assignee.id, assignee]),
 	);
+
+	if (loading && items.length === 0) {
+		return (
+			<p role="status" className="flex min-h-72 items-center p-6 text-muted-foreground">
+				Loading feedback…
+			</p>
+		);
+	}
 
 	if (items.length === 0) {
 		return (
@@ -108,12 +125,24 @@ export function FeedbackList({
 						key={item.id}
 						className={isSelected ? "bg-dashboard-primary-soft/30" : undefined}
 					>
+						<div className="flex items-stretch">
+						{selection ? (
+							<label className="flex shrink-0 cursor-pointer items-center pl-5">
+								<input
+									type="checkbox"
+									className="size-4 cursor-pointer accent-primary"
+									checked={selection.checked.has(item.id)}
+									onChange={() => selection.onToggle(item.id)}
+									aria-label={`Select ${item.title}`}
+								/>
+							</label>
+						) : null}
 						<button
 							type="button"
 							onClick={() => onSelect(item.id)}
 							aria-expanded={isSelected}
 							aria-controls={panelId}
-							className="w-full px-5 py-4 text-left outline-none transition-colors hover:bg-muted/45 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
+							className={`w-full min-w-0 flex-1 py-4 pr-5 text-left outline-none transition-colors hover:bg-muted/45 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset ${selection ? "pl-3" : "pl-5"}`}
 						>
 							<span className="flex flex-col gap-3 lg:flex-row lg:items-center">
 								<span className="min-w-0 flex-1">
@@ -136,6 +165,7 @@ export function FeedbackList({
 								</span>
 							</span>
 						</button>
+						</div>
 						{isSelected ? (
 							<div id={panelId} role="region" className="border-t">
 								{renderDetail(item)}

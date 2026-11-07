@@ -1,43 +1,31 @@
 import { CircleAlert, ClipboardCheck, UserRoundX } from "lucide-react";
 
 import type { Taxonomies } from "@/lib/taxonomy";
-import {
-	finalStatusValues,
-	minStatusRank,
-	taxonomyColorStyle,
-	taxonomyItemFor,
-} from "@/lib/taxonomy";
-import type { FeedbackItem } from "./model";
+import { taxonomyColorStyle } from "@/lib/taxonomy";
+
+/** Queue counters computed on the server from aggregates. */
+export type FeedbackQueueSummary = {
+	readonly open: number;
+	readonly needsTriage: number;
+	readonly unassigned: number;
+	readonly critical: number;
+	/** Highest priority rank present in the open backlog (-1 if none). */
+	readonly laneRank: number;
+};
 
 export function FeedbackSummary({
-	items,
+	summary,
 	taxonomies,
 }: {
-	readonly items: readonly FeedbackItem[];
+	readonly summary: FeedbackQueueSummary;
 	readonly taxonomies: Taxonomies;
 }) {
-	const finals = finalStatusValues(taxonomies);
-	const minRank = minStatusRank(taxonomies);
-	const openItems = items.filter((item) => !finals.has(item.status));
-	const rankOf = (priority: string) =>
-		taxonomyItemFor(taxonomies.priorities, priority).rank;
-	// Critical lane = highest rank present in the open backlog.
-	const laneRank = Math.max(-1, ...openItems.map((item) => rankOf(item.priority)));
+	const { needsTriage, unassigned, critical, laneRank } = summary;
 	const laneLabel =
 		taxonomies.priorities.find((entry) => entry.rank === laneRank)?.label ??
 		"Critical";
 	const laneColor =
 		taxonomies.priorities.find((entry) => entry.rank === laneRank)?.color;
-	const needsTriage = openItems.filter(
-		(item) =>
-			taxonomyItemFor(taxonomies.statuses, item.status).rank === minRank,
-	).length;
-	const unassigned = openItems.filter(
-		(item) => item.assigneeId === null,
-	).length;
-	const critical = openItems.filter(
-		(item) => rankOf(item.priority) === laneRank,
-	).length;
 
 	return (
 		<section
@@ -49,7 +37,7 @@ export function FeedbackSummary({
 					Open feedback
 				</p>
 				<p className="mt-2 font-heading text-2xl font-semibold tabular-nums">
-					{openItems.length}
+					{summary.open}
 				</p>
 				<p className="mt-1 text-sm text-muted-foreground">
 					Needs a product decision
